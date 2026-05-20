@@ -1,0 +1,66 @@
+
+networks:
+  hadoop_net:
+    driver: bridge
+
+services:
+  namenode:
+    build: .
+    hostname: namenode
+    container_name: namenode
+    networks:
+      - hadoop_net
+    ports:
+      - "9870:9870"
+      - "8088:8088"
+      - "9000:9000"
+    volumes:
+      - ./logs:/opt/hadoop/logs
+      - ./cmd_logs:/cmd_logs
+      - ./config:/opt/hadoop/etc/hadoop
+      - ./data:/data
+      - ./scripts:/opt/scripts
+    command: tail -f /dev/null
+
+  datanode1:
+    build: .
+    hostname: datanode1
+    container_name: datanode1
+    networks:
+      - hadoop_net
+    volumes:
+      - ./logs:/opt/hadoop/logs
+      - ./cmd_logs:/cmd_logs
+      - ./config:/opt/hadoop/etc/hadoop
+      - ./data:/data
+      - ./scripts:/opt/scripts
+    command: tail -f /dev/null
+
+  datanode2:
+    build: .
+    hostname: datanode2
+    container_name: datanode2
+    networks:
+      - hadoop_net
+    volumes:
+      - ./logs:/opt/hadoop/logs
+      - ./cmd_logs:/cmd_logs
+      - ./config:/opt/hadoop/etc/hadoop
+      - ./data:/data
+      - ./scripts:/opt/scripts
+    command: tail -f /dev/null
+
+  datanode3:
+    build: .
+    hostname: datanode3
+    container_name: datanode3
+    networks:
+      - hadoop_net
+    volumes:
+      - ./logs:/opt/hadoop/logs
+      - ./cmd_logs:/cmd_logs
+      - ./config:/opt/hadoop/etc/hadoop
+      - ./data:/data
+      - ./scripts:/opt/scripts
+    command: tail -f /dev/null
+

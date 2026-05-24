@@ -101,7 +101,7 @@ echo "  -> Master: NameNode + SecondaryNameNode started"
 
 echo "[3/5] Start DataNode tren Workers..."
 for W in "${WORKERS[@]}"; do
-    ssh $SSH_OPTS "$SSH_USER@$W" "sudo -E JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/hdfs --daemon start datanode"
+    ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/hdfs --daemon start datanode"
     echo "  -> $SSH_USER@$W: DataNode started"
 done
 
@@ -111,7 +111,7 @@ echo "  -> Master: ResourceManager started"
 
 echo "[5/5] Start NodeManager tren Workers..."
 for W in "${WORKERS[@]}"; do
-    ssh $SSH_OPTS "$SSH_USER@$W" "sudo -E JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/yarn --daemon start nodemanager"
+    ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/yarn --daemon start nodemanager"
     echo "  -> $SSH_USER@$W: NodeManager started"
 done
 

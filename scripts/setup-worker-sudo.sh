@@ -31,7 +31,7 @@ echo ""
 for W in "${WORKERS[@]}"; do
     echo "--- $SSH_USER@$W ---"
     echo "Nhap mat khau cua $SSH_USER tren $W khi duoc yeu cau:"
-    ssh $SSH_OPTS "$SSH_USER@$W" "echo '$SSH_USER ALL=(ALL) NOPASSWD: /opt/hadoop/bin/*, /opt/hadoop/sbin/*, /usr/bin/jps' | sudo tee /etc/sudoers.d/hadoop > /dev/null && sudo chmod 440 /etc/sudoers.d/hadoop && echo '  -> Da cau hinh sudoers thanh cong'"
+    ssh $SSH_OPTS "$SSH_USER@$W" "echo '$SSH_USER ALL=(ALL) NOPASSWD: SETENV: /opt/hadoop/bin/*, /opt/hadoop/sbin/*, /usr/bin/jps' | sudo tee /etc/sudoers.d/hadoop > /dev/null && sudo chmod 440 /etc/sudoers.d/hadoop && echo '  -> Da cau hinh sudoers thanh cong'"
     echo ""
 done
 

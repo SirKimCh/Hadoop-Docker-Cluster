@@ -34,9 +34,19 @@ Hadoop-Docker-Cluster/
 ├── scripts/                        # Bash script khởi động và chạy ứng dụng
 │   ├── init-ssh.sh                 # Kích hoạt SSH daemon trên container
 │   ├── start-hadoop.sh             # Format HDFS, khởi động HDFS + YARN, kiểm tra jps
-│   └── run-wordcount.sh            # Tải dữ liệu, biên dịch, đóng gói, chạy WordCount
+│   ├── run-wordcount.sh            # Tải dữ liệu, biên dịch, đóng gói, chạy WordCount
+│   ├── run-beer-analysis.sh        # Chạy phân tích dữ liệu bia
+│   ├── run-retail-q1.sh            # Chạy bài tập Online Retail - Câu 1
+│   ├── run-retail-q2.sh            # Chạy bài tập Online Retail - Câu 2
+│   ├── plot_speedup_q1.py          # Vẽ biểu đồ Speedup Câu 1
+│   └── plot_speedup_q2.py          # Vẽ biểu đồ Speedup Câu 2
 ├── data/                           # Dữ liệu đầu vào và mã nguồn Java
-│   └── WordCount.java              # Chương trình MapReduce đếm từ
+│   ├── WordCount.java              # Chương trình MapReduce đếm từ
+│   ├── BeerAnalysis.java           # Phân tích dữ liệu bia
+│   ├── OnlineRetailQ1.java         # Bài tập Online Retail - Câu 1
+│   ├── OnlineRetailQ2.java         # Bài tập Online Retail - Câu 2
+│   └── online_retail_II.csv        # Dữ liệu giao dịch bán lẻ
+├── result/                         # Kết quả MapReduce và log thời gian (volume mount)
 ├── logs/                           # Log hệ thống Hadoop daemon (volume mount)
 └── cmd_logs/                       # File ghi lại toàn bộ phiên thao tác dòng lệnh
 ```
@@ -203,7 +213,202 @@ Kết quả mong đợi: `Live datanodes (3):`
 
 ---
 
-## 7. Các WARN trong log — Giải thích và mức độ ảnh hưởng
+## 7. Bài tập Online Retail - Câu 1
+
+### Mô tả
+
+Sử dụng MapReduce để đếm số lượng hóa đơn (Invoice) duy nhất theo từng quốc gia (Country) từ dữ liệu giao dịch bán lẻ. Lọc bỏ các hóa đơn bị hủy (Invoice bắt đầu bằng chữ "C").
+
+### Cấu trúc dữ liệu đầu vào
+
+File `online_retail_II.csv` với các cột:
+- Invoice (cột 0): Mã hóa đơn
+- Country (cột 7): Quốc gia
+
+### Cách chạy
+
+**Bước 1:** Build lại image (nếu chưa build hoặc Dockerfile thay đổi):
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+**Bước 2:** Khởi động SSH trên cả 4 containers:
+
+```bash
+docker exec namenode bash /opt/scripts/init-ssh.sh
+docker exec datanode1 bash /opt/scripts/init-ssh.sh
+docker exec datanode2 bash /opt/scripts/init-ssh.sh
+docker exec datanode3 bash /opt/scripts/init-ssh.sh
+```
+
+**Bước 3:** Truy cập vào container namenode và khởi động Hadoop:
+
+```bash
+docker exec -it namenode bash
+/opt/scripts/start-hadoop.sh
+```
+
+**Bước 4:** Chạy script với số Node (lặp lại cho 1, 2, 3 Node):
+
+```bash
+/opt/scripts/run-retail-q1.sh 1
+/opt/scripts/run-retail-q1.sh 2
+/opt/scripts/run-retail-q1.sh 3
+```
+
+**Bước 5:** Vẽ biểu đồ Speedup:
+
+```bash
+python3 /opt/scripts/plot_speedup_q1.py
+```
+
+### Cấu trúc logic MapReduce
+
+**Luồng dữ liệu:**
+
+```
+online_retail_II.csv
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────┐
+│  MAPPER (RetailMapper)                                      │
+│  ─────────────────────                                      │
+│  Input:  (offset, dòng CSV)                                 │
+│  Output: (Country, Invoice)                                 │
+│                                                             │
+│  1. Bỏ qua dòng header nếu cột Invoice chứa "Invoice"      │
+│  2. Tách dòng CSV bằng regex: ,(?=(?:[^"]*"[^"]*")*[^"]*$) │
+│     → Regex này bỏ qua dấu phẩy nằm trong ngoặc kép        │
+│  3. Lấy cột 0 (Invoice) và cột 7 (Country)                 │
+│  4. Lọc bỏ Invoice bắt đầu bằng "C" (hóa đơn bị hủy)      │
+│  5. Emit key=Country, value=Invoice                         │
+└─────────────────────────────────────────────────────────────┘
+        │
+        ▼  Shuffle & Sort (Hadoop tự động nhóm theo key)
+┌─────────────────────────────────────────────────────────────┐
+│  REDUCER (RetailReducer)                                    │
+│  ──────────────────────                                     │
+│  Input:  (Country, [Invoice1, Invoice2, Invoice3, ...])     │
+│  Output: (Country, số_lượng_invoice_duy_độc)                │
+│                                                             │
+│  1. Dùng HashSet<String> để lưu các Invoice                 │
+│     → HashSet tự động loại bỏ trùng lặp                    │
+│  2. Đếm số phần tử trong HashSet                           │
+│  3. Emit key=Country, value=count                           │
+└─────────────────────────────────────────────────────────────┘
+        │
+        ▼
+part-r-00000 (kết quả cuối cùng)
+```
+
+**Tại sao dùng HashSet?**
+
+Một hóa đơn (Invoice) có thể có nhiều dòng trong file CSV (mỗi dòng là một sản phẩm trong hóa đơn). Ví dụ hóa đơn `489434` có 4 sản phẩm → 4 dòng. Khi map, cả 4 dòng đều emit `(United Kingdom, 489434)`. Nếu chỉ đếm số value sẽ ra 4, nhưng thực tế chỉ có 1 hóa đơn. HashSet giúp đếm đúng số hóa đơn duy nhất.
+
+### Kết quả
+
+- Kết quả MapReduce: `result/dd-MM-yyyy_HH-MM_Q1_XNodes/part-r-00000`
+- File log thời gian: `result/q1_execution_times.csv`
+- Biểu đồ: `result/q1_speedup_chart.png`
+
+Kết quả ví dụ:
+
+```
+Australia       117
+Austria         51
+Belgium         183
+France          746
+Germany         1095
+United Kingdom  23493
+...
+```
+
+Kết quả tự động có trên host tại `result/` nhờ volume mount.
+
+---
+
+## 8. Bài tập Online Retail - Câu 2
+
+### Mô tả
+
+Đếm số lượng khách hàng (Customer ID) duy nhất theo từng quốc gia (Country). Lọc bỏ hóa đơn bị hủy (bắt đầu bằng "C") và các dòng không có Customer ID.
+
+### Cấu trúc logic MapReduce
+
+```
+online_retail_II.csv
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────┐
+│  MAPPER                                                     │
+│  1. Bỏ header                                               │
+│  2. Tách CSV bằng regex                                     │
+│  3. Lọc: bỏ Invoice bắt đầu bằng "C", bỏ Customer ID rỗng  │
+│  4. Emit (Country, Customer ID)                             │
+└─────────────────────────────────────────────────────────────┘
+        │
+        ▼  Shuffle & Sort
+┌─────────────────────────────────────────────────────────────┐
+│  REDUCER                                                    │
+│  1. HashSet<Customer ID> loại bỏ trùng                      │
+│  2. Emit (Country, count)                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Cách chạy
+
+**Bước 1:** Build lại image (Dockerfile đã thay đổi):
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+**Bước 2:** Khởi động SSH và Hadoop:
+
+```bash
+docker exec namenode bash /opt/scripts/init-ssh.sh
+docker exec datanode1 bash /opt/scripts/init-ssh.sh
+docker exec datanode2 bash /opt/scripts/init-ssh.sh
+docker exec datanode3 bash /opt/scripts/init-ssh.sh
+
+docker exec -it namenode bash
+/opt/scripts/start-hadoop.sh
+```
+
+**Bước 3:** Chạy script với số Node:
+
+```bash
+/opt/scripts/run-retail-q2.sh 3
+```
+
+**Bước 4:** Lặp lại với các số Node khác nhau (1, 2, 3):
+
+```bash
+/opt/scripts/run-retail-q2.sh 1
+/opt/scripts/run-retail-q2.sh 2
+/opt/scripts/run-retail-q2.sh 3
+```
+
+**Bước 5:** Vẽ biểu đồ:
+
+```bash
+python3 /opt/scripts/plot_speedup_q2.py
+```
+
+### Kết quả
+
+- Kết quả MapReduce: `result/dd-MM-yyyy_HH-MM_Q2_XNodes/part-r-00000`
+- File log thời gian: `result/q2_execution_times.csv`
+- Biểu đồ: `result/q2_speedup_chart.png`
+
+Kết quả tự động có trên host tại `result/` nhờ volume mount.
+
+---
+
+## 9. Các WARN trong log — Giải thích và mức độ ảnh hưởng
 
 | WARN | Nguồn | Ảnh hưởng |
 |---|---|---|

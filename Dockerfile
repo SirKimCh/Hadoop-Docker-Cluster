@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     openssh-server \
     openssh-client \
     wget \
+    python3 \
+    python3-pip \
+    && pip3 install matplotlib \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

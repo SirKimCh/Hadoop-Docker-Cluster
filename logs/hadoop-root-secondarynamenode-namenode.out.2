@@ -1,0 +1,31 @@
+log4j:ERROR Could not find value for key log4j.appender.RFA
+log4j:ERROR Could not instantiate appender named "RFA".
+log4j:WARN No appenders could be found for logger (org.apache.commons.beanutils.FluentPropertyBeanIntrospector).
+log4j:WARN Please initialize the log4j system properly.
+log4j:WARN See http://logging.apache.org/log4j/1.2/faq.html#noconfig for more info.
+core file size          (blocks, -c) 0
+data seg size           (kbytes, -d) unlimited
+scheduling priority             (-e) 0
+file size               (blocks, -f) unlimited
+pending signals                 (-i) 31201
+max locked memory       (kbytes, -l) unlimited
+max memory size         (kbytes, -m) unlimited
+open files                      (-n) 1048576
+pipe size            (512 bytes, -p) 8
+POSIX message queues     (bytes, -q) 819200
+real-time priority              (-r) 0
+stack size              (kbytes, -s) 8192
+cpu time               (seconds, -t) unlimited
+max user processes              (-u) unlimited
+virtual memory          (kbytes, -v) unlimited
+file locks                      (-x) unlimited
+java.io.IOException: Inconsistent checkpoint fields.
+LV = -64 namespaceID = 1873686885 cTime = 1779588553833 ; clusterId = CID-9bf2598a-8f18-40d5-ae39-330d42e11014 ; blockpoolId = BP-1130971082-172.18.0.4-1779588553833.
+Expecting respectively: -64; 713569621; 1779588094830; CID-a5b24e31-69d3-4d1e-b3b4-de7fa1e8d98c; BP-1117587796-172.18.0.4-1779588094830.
+	at org.apache.hadoop.hdfs.server.namenode.CheckpointSignature.validateStorageInfo(CheckpointSignature.java:143)
+	at org.apache.hadoop.hdfs.server.namenode.SecondaryNameNode.doCheckpoint(SecondaryNameNode.java:550)
+	at org.apache.hadoop.hdfs.server.namenode.SecondaryNameNode.doWork(SecondaryNameNode.java:360)
+	at org.apache.hadoop.hdfs.server.namenode.SecondaryNameNode$1.run(SecondaryNameNode.java:325)
+	at org.apache.hadoop.security.SecurityUtil.doAsLoginUserOrFatal(SecurityUtil.java:482)
+	at org.apache.hadoop.hdfs.server.namenode.SecondaryNameNode.run(SecondaryNameNode.java:321)
+	at java.lang.Thread.run(Thread.java:750)

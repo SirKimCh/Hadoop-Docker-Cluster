@@ -1,0 +1,28 @@
+ls -l:
+total 36
+-rw-r--r-- 1 root root  105 May 24 03:00 container_tokens
+-rwx------ 1 root root  719 May 24 03:00 default_container_executor.sh
+-rwx------ 1 root root  664 May 24 03:00 default_container_executor_session.sh
+lrwxrwxrwx 1 root root  104 May 24 03:00 job.jar -> /opt/hadoop/tmp/nm-local-dir/usercache/root/appcache/application_1779591541305_0002/filecache/11/job.jar
+lrwxrwxrwx 1 root root  104 May 24 03:00 job.xml -> /opt/hadoop/tmp/nm-local-dir/usercache/root/appcache/application_1779591541305_0002/filecache/13/job.xml
+drwxr-xr-x 2 root root 4096 May 24 03:00 jobSubmitDir
+-rwx------ 1 root root 4984 May 24 03:00 launch_container.sh
+drwx--x--- 2 root root 4096 May 24 03:00 tmp
+find -L . -maxdepth 5 -ls:
+   163916      4 drwx--x---   4 root     root         4096 May 24 03:00 .
+   163925      4 -rw-r--r--   1 root     root           48 May 24 03:00 ./.launch_container.sh.crc
+   163919      4 drwx--x---   2 root     root         4096 May 24 03:00 ./tmp
+   163928      4 -rw-r--r--   1 root     root           16 May 24 03:00 ./.default_container_executor_session.sh.crc
+   163922      4 -rw-r--r--   1 root     root           12 May 24 03:00 ./.container_tokens.crc
+   163929      4 -rwx------   1 root     root          719 May 24 03:00 ./default_container_executor.sh
+   163924      8 -rwx------   1 root     root         4984 May 24 03:00 ./launch_container.sh
+   163933      4 drwxr-xr-x   2 root     root         4096 May 24 03:00 ./jobSubmitDir
+   163893      4 -r-x------   1 root     root           47 May 24 03:00 ./jobSubmitDir/job.splitmetainfo
+   163901      4 -r-x------   1 root     root          131 May 24 03:00 ./jobSubmitDir/job.split
+   163921      4 -rw-r--r--   1 root     root          105 May 24 03:00 ./container_tokens
+   163927      4 -rwx------   1 root     root          664 May 24 03:00 ./default_container_executor_session.sh
+   163930      4 -rw-r--r--   1 root     root           16 May 24 03:00 ./.default_container_executor.sh.crc
+   163897      4 drwx------   2 root     root         4096 May 24 03:00 ./job.jar
+   163898      4 -r-x------   1 root     root         3347 May 24 03:00 ./job.jar/job.jar
+   163904    180 -r-x------   1 root     root       183608 May 24 03:00 ./job.xml
+broken symlinks(find -L . -maxdepth 5 -type l -ls):

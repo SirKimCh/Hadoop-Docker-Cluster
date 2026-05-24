@@ -206,6 +206,100 @@ chmod +x scripts/run-retail-q2.sh
 
 ---
 
+## Bước 6: Triển khai nhanh qua GitHub (CI/CD)
+
+Toàn bộ mã nguồn dự án được quản lý trên GitHub. Đồng đội trên VPS chỉ cần clone repo và chạy script tự động.
+
+### 6.1. Clone dự án từ GitHub
+
+Trên **Master VPS** (`10.32.2.236`):
+
+```bash
+cd /home/ubuntu
+git clone https://github.com/SirKimCh/Hadoop-Docker-Cluster.git
+cd Hadoop-Docker-Cluster
+```
+
+### 6.2. Cấu hình `.env`
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Điền IP thực tế:
+
+```
+MASTER_IP=10.32.2.236
+WORKER1_IP=10.32.2.213
+WORKER2_IP=10.32.2.125
+SSH_USER=ubuntu
+HADOOP_HOME=/opt/hadoop
+```
+
+### 6.3. Cấp quyền thực thi cho tất cả script
+
+```bash
+chmod +x scripts/*.sh
+```
+
+### 6.4. Triển khai tự động toàn cụm
+
+Chạy tuần tự trên **Master**:
+
+```bash
+# Bước A: Đồng bộ cấu hình Hadoop sang 2 Worker
+./scripts/sync_cluster_config.sh
+
+# Bước B: Khởi động cụm Hadoop
+./scripts/start-hadoop.sh
+
+# Bước C: Chạy benchmark Câu 1 (tự động compile, chạy 6 Mapper x 3 lần, xuất Excel + Chart)
+./scripts/run-retail-q1.sh
+
+# Bước D: Chạy benchmark Câu 2
+./scripts/run-retail-q2.sh
+```
+
+### 6.5. Pull cập nhật mới nhất
+
+Khi đồng đội push code mới lên GitHub, trên Master chỉ cần:
+
+```bash
+cd /home/ubuntu/Hadoop-Docker-Cluster
+git pull origin main
+```
+
+Sau đó chạy lại script cần thiết. File `.env` đã nằm trong `.gitignore` nên không bị ghi đè khi pull.
+
+### 6.6. Luồng triển khai tổng thể
+
+```
+Developer (local)
+    │
+    │  git push origin main
+    ▼
+GitHub: SirKimCh/Hadoop-Docker-Cluster
+    │
+    │  git pull origin main
+    ▼
+Master VPS (10.32.2.236)
+    │
+    │  ./scripts/sync_cluster_config.sh  (rsync XML + workers)
+    ├──► Worker 1 (10.32.2.213)
+    └──► Worker 2 (10.32.2.125)
+    │
+    │  ./scripts/run-retail-q1.sh  (compile → HDFS → MapReduce → Python)
+    ▼
+result/<timestamp>_Q1/
+    ├── part-r-00000          (kết quả MapReduce)
+    ├── q1_raw_times.csv      (thời gian thô)
+    ├── q1_benchmark_*.xlsx   (Excel)
+    └── q1_speedup_chart_*.png (biểu đồ)
+```
+
+---
+
 ## Kết quả đầu ra
 
 Mỗi lần chạy benchmark tạo thư mục `result/<ngày-giờ>_Q1/` (hoặc `_Q2/`) chứa:

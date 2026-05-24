@@ -22,6 +22,7 @@ fi
 SSH_USER="${SSH_USER:-ubuntu}"
 HADOOP_HOME="${HADOOP_HOME:-/opt/hadoop}"
 HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+JAVA_HOME_PATH="${JAVA_HOME:-/usr/lib/jvm/java-8-openjdk-amd64}"
 
 TMP_DIR=$(mktemp -d)
 trap "rm -rf $TMP_DIR" EXIT
@@ -132,18 +133,28 @@ EOF
 
 printf "%s\n" "$WORKER1_IP" "$WORKER2_IP" > "$TMP_DIR/workers"
 
+cat > "$TMP_DIR/hadoop-env.sh" <<EOF
+export JAVA_HOME=${JAVA_HOME_PATH}
+export HADOOP_HOME=${HADOOP_HOME}
+export HDFS_NAMENODE_USER=root
+export HDFS_DATANODE_USER=root
+export HDFS_SECONDARYNAMENODE_USER=root
+export YARN_RESOURCEMANAGER_USER=root
+export YARN_NODEMANAGER_USER=root
+EOF
+
 echo "=== Cau hinh Hadoop Cluster ==="
 echo "Master  : $MASTER_IP"
 echo "Worker 1: $WORKER1_IP"
 echo "Worker 2: $WORKER2_IP"
 echo "SSH User: $SSH_USER"
 echo "HADOOP  : $HADOOP_HOME"
+echo "JAVA    : $JAVA_HOME_PATH"
 echo ""
 
 echo "[1/3] Cap nhat cau hinh tren Master ($MASTER_IP)..."
 sudo mkdir -p "$HADOOP_CONF_DIR"
-sudo cp "$TMP_DIR"/*.xml "$HADOOP_CONF_DIR/"
-sudo cp "$TMP_DIR/workers" "$HADOOP_CONF_DIR/"
+sudo cp "$TMP_DIR"/*.xml "$TMP_DIR/workers" "$HADOOP_CONF_DIR/"
 echo "  -> Da cap nhat $HADOOP_CONF_DIR/"
 
 echo "[2/3] Dong bo cau hinh sang Worker 1 ($WORKER1_IP)..."
@@ -153,6 +164,7 @@ rsync -avz --delete \
     "$TMP_DIR/yarn-site.xml" \
     "$TMP_DIR/mapred-site.xml" \
     "$TMP_DIR/workers" \
+    "$TMP_DIR/hadoop-env.sh" \
     ${SSH_USER}@${WORKER1_IP}:${HADOOP_CONF_DIR}/
 echo "  -> Done Worker 1"
 
@@ -163,6 +175,7 @@ rsync -avz --delete \
     "$TMP_DIR/yarn-site.xml" \
     "$TMP_DIR/mapred-site.xml" \
     "$TMP_DIR/workers" \
+    "$TMP_DIR/hadoop-env.sh" \
     ${SSH_USER}@${WORKER2_IP}:${HADOOP_CONF_DIR}/
 echo "  -> Done Worker 2"
 

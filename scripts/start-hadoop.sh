@@ -332,10 +332,14 @@ sleep 10
 # ============================================================
 echo ""
 echo "=== Phan quyen HDFS cho user $SSH_USER ==="
+hdfs dfs -chmod 777 /
 hdfs dfs -mkdir -p /data/input/retail
 hdfs dfs -chmod -R 777 /data
 hdfs dfs -chown -R "$SSH_USER":"$SSH_USER" /data
+hdfs dfs -mkdir -p "/user/$SSH_USER"
+hdfs dfs -chown "$SSH_USER":"$SSH_USER" "/user/$SSH_USER"
 echo "  -> /data da duoc chown cho $SSH_USER"
+echo "  -> /user/$SSH_USER da duoc tao"
 
 mkdir -p "$PROJECT_ROOT/result"
 chown -R "$SSH_USER":"$SSH_USER" "$PROJECT_ROOT/result"

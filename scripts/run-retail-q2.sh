@@ -19,7 +19,7 @@ cd /data
 javac -classpath $(hadoop classpath) OnlineRetailQ2.java
 jar cf retail-q2.jar OnlineRetailQ2*.class
 
-echo "Mapper,Run,Time" > "$RAW_CSV"
+echo "So Mapper,Lan chay,Thoi gian" > "$RAW_CSV"
 
 for NMAP in "${MAPPERS[@]}"; do
     for RUN in $(seq 1 $RUNS); do

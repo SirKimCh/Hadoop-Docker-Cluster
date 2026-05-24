@@ -180,13 +180,15 @@ Script tự động thực hiện toàn bộ chu trình (không cần `sudo` —
 [0] Dừng toàn bộ daemon cũ (nếu có), đợi process kết thúc hoàn toàn
 [1] Format HDFS
 [2] Start NameNode + SecondaryNameNode trên Master
-    → Chờ NameNode sẵn sàng (kiểm tra port 9000, tối đa 30s)
+    → Chờ NameNode sẵn sàng (kiểm tra jps + hdfs dfs, tối đa 40s)
+    → THOÁT nếu NameNode không khởi động được
 [3] Start DataNode trên 2 Worker (qua SSH)
 [4] Start ResourceManager trên Master
-    → Chờ ResourceManager sẵn sàng (kiểm tra port 8088, tối đa 30s)
+    → Chờ ResourceManager sẵn sàng (kiểm tra jps, tối đa 40s)
+    → THOÁT nếu ResourceManager không khởi động được
 [5] Start NodeManager trên 2 Worker (qua SSH)
 [6] Đợi 10s cho tất cả daemon ổn định
-[7] Kiểm tra HDFS sẵn sàng, phân quyền /data cho user ubuntu
+[7] Phân quyền /data cho user ubuntu
 [8] jps + hdfs dfsadmin -report
 ```
 
@@ -386,6 +388,22 @@ Script `start-hadoop.sh` đã tự `chown /data` cho user `ubuntu`. Nếu vẫn 
 sudo hdfs dfs -chmod -R 777 /data
 sudo hdfs dfs -chown -R ubuntu /data
 ```
+
+**Lỗi `hdfs: command not found` / `hadoop: command not found`:**
+`PATH` chưa chứa thư mục bin của Hadoop. Cách nhanh:
+```bash
+export PATH=$PATH:/opt/hadoop/bin:/opt/hadoop/sbin
+```
+Hoặc thêm vào `~/.bashrc` rồi `source ~/.bashrc` (xem Bước 1.3). Các script benchmark đã tự set PATH.
+
+**Lỗi NameNode / ResourceManager không khởi động được:**
+Script sẽ dừng lại nếu phát hiện daemon crash. Kiểm tra log:
+```bash
+cat /opt/hadoop/logs/*namenode*.log | tail -80
+cat /opt/hadoop/logs/*resourcemanager*.log | tail -80
+jps                              # Xem daemon nào đang chạy
+```
+Nguyên nhân thường gặp: đã format NameNode trước đó → cần format lại hoặc xóa `dfs.namenode.name.dir`.
 
 **Lỗi `bad interpreter: /bin/bash^M`:**
 Do Windows line endings:

@@ -71,8 +71,6 @@ for W in "${WORKERS[@]}"; do
     else
         echo "FAIL"
         echo "ERROR: Khong the SSH hoac khong tim thay Java tren $W"
-        echo "  -> Dam bao SSH key da duoc cau hinh tu Master sang Worker"
-        echo "  -> Dam bao Java 8 da duoc cai dat tren Worker"
         exit 1
     fi
 done
@@ -110,11 +108,12 @@ echo "  -> Da dung tat ca daemon cu"
 echo ""
 
 # ============================================================
-# Kiem tra port 9000 trong truoc khi format
+# Kiem tra NameNode cu da ket thuc chua
 # ============================================================
-if ss -tlnp 2>/dev/null | grep -q ":9000 " || netstat -tlnp 2>/dev/null | grep -q ":9000 "; then
-    echo "WARNING: Port 9000 van dang bi chiem. Doi them 5 giay..."
-    sleep 5
+if jps 2>/dev/null | grep -qi "NameNode"; then
+    echo "WARNING: NameNode van con dang chay. Thu dung lai..."
+    $HADOOP_HOME/bin/hdfs --daemon stop namenode 2>/dev/null || true
+    sleep 3
 fi
 
 # ============================================================
@@ -128,30 +127,45 @@ echo "Workers    : ${WORKERS[*]}"
 echo ""
 
 echo "[1/5] Format HDFS..."
+
+# Xoa data cu de tranh xung dot
+NN_DATA_DIR="/opt/hadoop/data/nameNode"
+if [ -d "$NN_DATA_DIR" ]; then
+    echo "  Xoa data cu tai $NN_DATA_DIR..."
+    rm -rf "$NN_DATA_DIR"
+fi
+
 $HADOOP_HOME/bin/hdfs namenode -format -force
 echo ""
 
 echo "[2/5] Start NameNode + SecondaryNameNode..."
+set +e
 $HADOOP_HOME/bin/hdfs --daemon start namenode
 $HADOOP_HOME/bin/hdfs --daemon start secondarynamenode
-echo "  -> Dang khoi dong NameNode..."
+set -e
 
-# Cho NameNode san sang (kiem tra port 9000)
+# Cho NameNode san sang — dung jps kiem tra process
 NN_READY=false
-for i in $(seq 1 15); do
-    if ss -tlnp 2>/dev/null | grep -q ":9000 " || netstat -tlnp 2>/dev/null | grep -q ":9000 "; then
-        NN_READY=true
-        break
+for i in $(seq 1 20); do
+    if jps 2>/dev/null | grep -q "NameNode"; then
+        # NameNode process ton tai, thu ket noi
+        if hdfs dfs -ls / >/dev/null 2>&1; then
+            NN_READY=true
+            break
+        fi
     fi
     sleep 2
 done
 
 if [ "$NN_READY" = true ]; then
-    echo "  -> Master: NameNode + SecondaryNameNode started (port 9000 OK)"
+    echo "  -> Master: NameNode + SecondaryNameNode started OK"
 else
-    echo "  -> WARNING: NameNode chua san sang sau 30s. Kiem tra log:"
-    echo "     cat $HADOOP_HOME/logs/*namenode*.log | tail -50"
-    echo "  -> Van tiep tuc..."
+    echo "  -> ERROR: NameNode khong the khoi dong!"
+    echo "     Kiem tra log: cat $HADOOP_HOME/logs/*namenode*.log | tail -80"
+    echo "     jps hien tai:"
+    jps
+    echo "  -> Dung lai. Sua loi truoc khi tiep tuc."
+    exit 1
 fi
 echo ""
 
@@ -163,13 +177,14 @@ done
 echo ""
 
 echo "[4/5] Start ResourceManager..."
+set +e
 $HADOOP_HOME/bin/yarn --daemon start resourcemanager
-echo "  -> Dang khoi dong ResourceManager..."
+set -e
 
-# Cho ResourceManager san sang (kiem tra port 8088)
+# Cho ResourceManager san sang
 RM_READY=false
-for i in $(seq 1 15); do
-    if ss -tlnp 2>/dev/null | grep -q ":8088 " || netstat -tlnp 2>/dev/null | grep -q ":8088 "; then
+for i in $(seq 1 20); do
+    if jps 2>/dev/null | grep -q "ResourceManager"; then
         RM_READY=true
         break
     fi
@@ -177,10 +192,11 @@ for i in $(seq 1 15); do
 done
 
 if [ "$RM_READY" = true ]; then
-    echo "  -> Master: ResourceManager started (port 8088 OK)"
+    echo "  -> Master: ResourceManager started OK"
 else
-    echo "  -> WARNING: ResourceManager chua san sang sau 30s. Kiem tra log:"
-    echo "     cat $HADOOP_HOME/logs/*resourcemanager*.log | tail -50"
+    echo "  -> ERROR: ResourceManager khong the khoi dong!"
+    echo "     Kiem tra log: cat $HADOOP_HOME/logs/*resourcemanager*.log | tail -80"
+    exit 1
 fi
 echo ""
 
@@ -200,29 +216,10 @@ sleep 10
 # ============================================================
 echo ""
 echo "=== Phan quyen HDFS cho user $SSH_USER ==="
-
-# Kiem tra HDFS da san sang chua
-HDFS_OK=false
-for i in $(seq 1 5); do
-    if hdfs dfs -ls / 2>/dev/null; then
-        HDFS_OK=true
-        break
-    fi
-    echo "  HDFS chua san sang, doi 5 giay..."
-    sleep 5
-done
-
-if [ "$HDFS_OK" = true ]; then
-    hdfs dfs -mkdir -p /data/input/retail
-    hdfs dfs -chmod -R 777 /data
-    hdfs dfs -chown -R "$SSH_USER":"$SSH_USER" /data
-    echo "  -> /data da duoc chown cho $SSH_USER"
-else
-    echo "  -> WARNING: HDFS chua san sang. Chay lai sau:"
-    echo "     hdfs dfs -mkdir -p /data/input/retail"
-    echo "     hdfs dfs -chmod -R 777 /data"
-    echo "     hdfs dfs -chown -R $SSH_USER /data"
-fi
+hdfs dfs -mkdir -p /data/input/retail
+hdfs dfs -chmod -R 777 /data
+hdfs dfs -chown -R "$SSH_USER":"$SSH_USER" /data
+echo "  -> /data da duoc chown cho $SSH_USER"
 
 mkdir -p "$PROJECT_ROOT/result"
 

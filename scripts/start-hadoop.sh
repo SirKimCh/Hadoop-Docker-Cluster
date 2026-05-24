@@ -38,7 +38,11 @@ export HDFS_SECONDARYNAMENODE_USER=root
 export YARN_RESOURCEMANAGER_USER=root
 export YARN_NODEMANAGER_USER=root
 
+SSH_KEY="/home/$SSH_USER/.ssh/id_rsa"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5"
+if [ -f "$SSH_KEY" ]; then
+    SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
+fi
 
 WORKERS_FILE="$HADOOP_HOME/etc/hadoop/workers"
 
@@ -64,7 +68,6 @@ for W in "${WORKERS[@]}"; do
     else
         echo "FAIL"
         echo "ERROR: Khong the SSH hoac khong tim thay Java tren $W"
-        echo "  -> Kiem tra: ssh $SSH_USER@$W 'ls $JAVA_HOME'"
         exit 1
     fi
 done
@@ -76,7 +79,7 @@ $HADOOP_HOME/bin/yarn --daemon stop resourcemanager 2>/dev/null || true
 $HADOOP_HOME/bin/hdfs --daemon stop secondarynamenode 2>/dev/null || true
 $HADOOP_HOME/bin/hdfs --daemon stop namenode 2>/dev/null || true
 for W in "${WORKERS[@]}"; do
-    ssh $SSH_OPTS "$SSH_USER@$W" "export JAVA_HOME=$JAVA_HOME && $HADOOP_HOME/bin/hdfs --daemon stop datanode 2>/dev/null; $HADOOP_HOME/bin/yarn --daemon stop nodemanager 2>/dev/null; true"
+    ssh $SSH_OPTS "$SSH_USER@$W" "sudo $HADOOP_HOME/bin/hdfs --daemon stop datanode 2>/dev/null; sudo $HADOOP_HOME/bin/yarn --daemon stop nodemanager 2>/dev/null; true"
 done
 echo "  -> Da dung tat ca daemon cu"
 echo ""
@@ -98,7 +101,7 @@ echo "  -> Master: NameNode + SecondaryNameNode started"
 
 echo "[3/5] Start DataNode tren Workers..."
 for W in "${WORKERS[@]}"; do
-    ssh $SSH_OPTS "$SSH_USER@$W" "export JAVA_HOME=$JAVA_HOME && $HADOOP_HOME/bin/hdfs --daemon start datanode"
+    ssh $SSH_OPTS "$SSH_USER@$W" "sudo -E JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/hdfs --daemon start datanode"
     echo "  -> $SSH_USER@$W: DataNode started"
 done
 
@@ -108,7 +111,7 @@ echo "  -> Master: ResourceManager started"
 
 echo "[5/5] Start NodeManager tren Workers..."
 for W in "${WORKERS[@]}"; do
-    ssh $SSH_OPTS "$SSH_USER@$W" "export JAVA_HOME=$JAVA_HOME && $HADOOP_HOME/bin/yarn --daemon start nodemanager"
+    ssh $SSH_OPTS "$SSH_USER@$W" "sudo -E JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/yarn --daemon start nodemanager"
     echo "  -> $SSH_USER@$W: NodeManager started"
 done
 
@@ -127,5 +130,13 @@ echo ""
 echo "=== jps (Master) ==="
 jps
 echo ""
+
+echo "=== jps (Workers) ==="
+for W in "${WORKERS[@]}"; do
+    echo "  $SSH_USER@$W:"
+    ssh $SSH_OPTS "$SSH_USER@$W" "jps" 2>/dev/null | grep -E "DataNode|NodeManager" || echo "    (chua khoi dong)"
+done
+echo ""
+
 echo "=== Cluster Status ==="
 hdfs dfsadmin -report 2>/dev/null | grep "Live datanodes" || echo "Dang khoi dong, doi vai giay..."

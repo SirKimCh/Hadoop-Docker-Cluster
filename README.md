@@ -86,6 +86,42 @@ ssh ubuntu@10.32.2.125 hostname
 
 ---
 
+## Bước 2.5: Cấu hình sudo không cần mật khẩu trên Workers
+
+Hadoop daemon (DataNode, NodeManager) yêu cầu chạy với quyền root. Cần cấp sudo không cần mật khẩu cho user `ubuntu` trên cả 2 Worker.
+
+### Cách 1: Tự động (chạy trên Master)
+
+```bash
+chmod +x scripts/setup-worker-sudo.sh
+./scripts/setup-worker-sudo.sh
+```
+
+Script sẽ SSH sang từng Worker và tạo file `/etc/sudoers.d/hadoop`.
+
+### Cách 2: Thủ công (trên từng Worker)
+
+SSH vào từng Worker và chạy:
+
+```bash
+ssh ubuntu@10.32.2.213
+echo 'ubuntu ALL=(ALL) NOPASSWD: /opt/hadoop/bin/*, /opt/hadoop/sbin/*, /usr/bin/jps' | sudo tee /etc/sudoers.d/hadoop
+sudo chmod 440 /etc/sudoers.d/hadoop
+exit
+```
+
+Lặp lại cho Worker 2 (`10.32.2.125`).
+
+### Xác nhận
+
+```bash
+ssh ubuntu@10.32.2.213 "sudo /opt/hadoop/bin/hdfs version"
+```
+
+Nếu không hỏi mật khẩu → cấu hình thành công.
+
+---
+
 ## Bước 3: Điền file `.env` và chạy script đồng bộ cụm
 
 ### 3.1. Clone dự án
@@ -294,6 +330,9 @@ Script `start-hadoop.sh` tự xử lý — tự động chạy lại với sudo.
 **Lỗi `JAVA_HOME is not set`:**
 Script hardcode `JAVA_HOME` và truyền qua sudo + SSH. Đảm bảo Java 8 đã cài trên cả 3 VPS.
 
+**Lỗi `datanode can only be executed by root` / `nodemanager can only be executed by root`:**
+Chưa cấu hình sudoers cho user `ubuntu` trên Worker. Chạy `./scripts/setup-worker-sudo.sh` hoặc xem Bước 2.5.
+
 **Lỗi `secondarynamenode is running as process XXXX`:**
 Script tự dừng daemon cũ trước khi khởi động. Nếu vẫn lỗi, dừng thủ công:
 ```bash
@@ -303,7 +342,7 @@ sudo -E /opt/hadoop/bin/yarn --daemon stop resourcemanager
 ```
 
 **Lỗi `Permission denied` khi SSH sang Worker:**
-SSH passwordless phải thiết lập cho user `ubuntu` (không phải root):
+SSH passwordless phải thiết lập cho user `ubuntu` (không phải root). Script đã tự dùng key `/home/ubuntu/.ssh/id_rsa` ngay cả khi chạy với sudo:
 ```bash
 ssh-keygen -t rsa -P "" -f ~/.ssh/id_rsa
 ssh-copy-id ubuntu@10.32.2.213

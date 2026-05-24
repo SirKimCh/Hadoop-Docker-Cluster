@@ -344,8 +344,8 @@ public class OnlineRetailAnalysis {
         return sumJob.waitForCompletion(true);
     }
 
-    private static boolean runTopCustomer(String input, String tempOutput, String finalOutput) throws Exception {
-        Job totalJob = Job.getInstance(jobConfiguration(input, 0), "q3 customer totals by country");
+    private static boolean runTopCustomer(String input, String tempOutput, String finalOutput, int mapperCount) throws Exception {
+        Job totalJob = Job.getInstance(jobConfiguration(input, mapperCount), "q3 customer totals by country");
         totalJob.setJarByClass(OnlineRetailAnalysis.class);
         totalJob.setMapperClass(CustomerPurchaseMapper.class);
         totalJob.setCombinerClass(DoubleSumCombiner.class);
@@ -379,7 +379,7 @@ public class OnlineRetailAnalysis {
             System.err.println("Usage:");
             System.err.println("  OnlineRetailAnalysis invoiceCount <input> <tempOutput> <output> [mapperCount]");
             System.err.println("  OnlineRetailAnalysis customerCount <input> <tempOutput> <output> [mapperCount]");
-            System.err.println("  OnlineRetailAnalysis topCustomer <input> <tempOutput> <output>");
+            System.err.println("  OnlineRetailAnalysis topCustomer <input> <tempOutput> <output> [mapperCount]");
             System.exit(2);
         }
 
@@ -393,7 +393,7 @@ public class OnlineRetailAnalysis {
             success = runDistinctCount(DistinctCustomerMapper.class, "q2 distinct customer count by country",
                     args[1], args[2], args[3], mapperCount);
         } else if ("topCustomer".equals(command)) {
-            success = runTopCustomer(args[1], args[2], args[3]);
+            success = runTopCustomer(args[1], args[2], args[3], mapperCount);
         } else {
             System.err.println("Unknown command: " + command);
             System.exit(2);

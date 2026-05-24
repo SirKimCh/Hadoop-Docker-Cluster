@@ -84,6 +84,10 @@ cat > "$TMP_DIR/hdfs-site.xml" <<EOF
         <name>dfs.datanode.use.datanode.hostname</name>
         <value>true</value>
     </property>
+    <property>
+        <name>dfs.namenode.datanode.registration.ip-hostname-check</name>
+        <value>false</value>
+    </property>
 </configuration>
 EOF
 

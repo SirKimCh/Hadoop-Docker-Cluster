@@ -223,27 +223,30 @@ echo ""
 
 echo "[3/5] Start DataNode tren Workers..."
 for W in "${WORKERS[@]}"; do
+    # Xoa data cu DataNode de tranh xung dot
+    ssh $SSH_OPTS "$SSH_USER@$W" "sudo rm -rf /opt/hadoop/data/dataNode 2>/dev/null; sudo mkdir -p /opt/hadoop/data/dataNode && sudo chown -R root:root /opt/hadoop/data/dataNode"
+
     # Thu daemon mode
     set +e
     ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/hdfs --daemon start datanode 2>&1"
     set -e
-    sleep 3
+    sleep 5
 
     # Kiem tra DataNode co chay khong
-    DN_RUNNING=$(ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps 2>/dev/null | grep -c DataNode" || echo "0")
+    DN_COUNT=$(ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps 2>/dev/null" | grep -c "DataNode" || true)
 
-    if [ "$DN_RUNNING" -gt 0 ]; then
+    if [ "$DN_COUNT" -gt 0 ]; then
         echo "  -> $SSH_USER@$W: DataNode started OK"
     else
         echo "  -> $SSH_USER@$W: Daemon mode that bai. Dung nohup..."
-        ssh $SSH_OPTS "$SSH_USER@$W" "sudo nohup $HADOOP_HOME/bin/hdfs datanode > $HADOOP_HOME/logs/datanode-nohup.out 2>&1 &"
+        ssh $SSH_OPTS "$SSH_USER@$W" "sudo touch /tmp/datanode-nohup.out && sudo chmod 666 /tmp/datanode-nohup.out && sudo nohup $HADOOP_HOME/bin/hdfs datanode > /tmp/datanode-nohup.out 2>&1 &"
         sleep 5
-        DN_RUNNING=$(ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps 2>/dev/null | grep -c DataNode" || echo "0")
-        if [ "$DN_RUNNING" -gt 0 ]; then
+        DN_COUNT=$(ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps 2>/dev/null" | grep -c "DataNode" || true)
+        if [ "$DN_COUNT" -gt 0 ]; then
             echo "  -> $SSH_USER@$W: DataNode started OK (nohup)"
         else
             echo "  -> $SSH_USER@$W: ERROR DataNode khong start duoc!"
-            ssh $SSH_OPTS "$SSH_USER@$W" "tail -10 $HADOOP_HOME/logs/datanode-nohup.out 2>/dev/null; tail -10 $HADOOP_HOME/logs/*datanode*.log 2>/dev/null"
+            ssh $SSH_OPTS "$SSH_USER@$W" "tail -15 /tmp/datanode-nohup.out 2>/dev/null; tail -15 $HADOOP_HOME/logs/*datanode*.log 2>/dev/null"
         fi
     fi
 done
@@ -268,7 +271,7 @@ fi
 # Neu daemon mode that bai, dung nohup chay truc tiep
 if [ "$RM_RUNNING" = false ]; then
     echo "  -> Daemon mode that bai (rc=$RM_RC). Dung nohup chay truc tiep..."
-    nohup $HADOOP_HOME/bin/yarn resourcemanager > $HADOOP_HOME/logs/resourcemanager-nohup.out 2>&1 &
+    nohup $HADOOP_HOME/bin/yarn resourcemanager > /tmp/resourcemanager-nohup.out 2>&1 &
     RM_PID=$!
     echo "  -> ResourceManager PID: $RM_PID"
     sleep 5
@@ -279,7 +282,7 @@ if [ "$RM_RUNNING" = false ]; then
     else
         echo "  -> ResourceManager PID $RM_PID da ket thuc!"
         echo "  -> Log:"
-        tail -20 $HADOOP_HOME/logs/resourcemanager-nohup.out 2>/dev/null || echo "    Khong co log"
+        tail -20 /tmp/resourcemanager-nohup.out 2>/dev/null || echo "    Khong co log"
     fi
 fi
 
@@ -298,23 +301,23 @@ for W in "${WORKERS[@]}"; do
     set +e
     ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/yarn --daemon start nodemanager 2>&1"
     set -e
-    sleep 3
+    sleep 5
 
     # Kiem tra NodeManager co chay khong
-    NM_RUNNING=$(ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps 2>/dev/null | grep -c NodeManager" || echo "0")
+    NM_COUNT=$(ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps 2>/dev/null" | grep -c "NodeManager" || true)
 
-    if [ "$NM_RUNNING" -gt 0 ]; then
+    if [ "$NM_COUNT" -gt 0 ]; then
         echo "  -> $SSH_USER@$W: NodeManager started OK"
     else
         echo "  -> $SSH_USER@$W: Daemon mode that bai. Dung nohup..."
-        ssh $SSH_OPTS "$SSH_USER@$W" "sudo nohup $HADOOP_HOME/bin/yarn nodemanager > $HADOOP_HOME/logs/nodemanager-nohup.out 2>&1 &"
+        ssh $SSH_OPTS "$SSH_USER@$W" "sudo touch /tmp/nodemanager-nohup.out && sudo chmod 666 /tmp/nodemanager-nohup.out && sudo nohup $HADOOP_HOME/bin/yarn nodemanager > /tmp/nodemanager-nohup.out 2>&1 &"
         sleep 5
-        NM_RUNNING=$(ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps 2>/dev/null | grep -c NodeManager" || echo "0")
-        if [ "$NM_RUNNING" -gt 0 ]; then
+        NM_COUNT=$(ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps 2>/dev/null" | grep -c "NodeManager" || true)
+        if [ "$NM_COUNT" -gt 0 ]; then
             echo "  -> $SSH_USER@$W: NodeManager started OK (nohup)"
         else
             echo "  -> $SSH_USER@$W: ERROR NodeManager khong start duoc!"
-            ssh $SSH_OPTS "$SSH_USER@$W" "tail -10 $HADOOP_HOME/logs/nodemanager-nohup.out 2>/dev/null; tail -10 $HADOOP_HOME/logs/*nodemanager*.log 2>/dev/null"
+            ssh $SSH_OPTS "$SSH_USER@$W" "tail -15 /tmp/nodemanager-nohup.out 2>/dev/null; tail -15 $HADOOP_HOME/logs/*nodemanager*.log 2>/dev/null"
         fi
     fi
 done

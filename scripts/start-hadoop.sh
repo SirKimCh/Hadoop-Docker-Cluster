@@ -70,6 +70,17 @@ for W in "${WORKERS[@]}"; do
 done
 echo ""
 
+echo "=== Dung toan bo daemon cu (neu co) ==="
+$HADOOP_HOME/bin/yarn --daemon stop nodemanager 2>/dev/null || true
+$HADOOP_HOME/bin/yarn --daemon stop resourcemanager 2>/dev/null || true
+$HADOOP_HOME/bin/hdfs --daemon stop secondarynamenode 2>/dev/null || true
+$HADOOP_HOME/bin/hdfs --daemon stop namenode 2>/dev/null || true
+for W in "${WORKERS[@]}"; do
+    ssh $SSH_OPTS "$SSH_USER@$W" "export JAVA_HOME=$JAVA_HOME && $HADOOP_HOME/bin/hdfs --daemon stop datanode 2>/dev/null; $HADOOP_HOME/bin/yarn --daemon stop nodemanager 2>/dev/null; true"
+done
+echo "  -> Da dung tat ca daemon cu"
+echo ""
+
 echo "=== Khoi dong Hadoop Cluster ==="
 echo "JAVA_HOME  : $JAVA_HOME"
 echo "HADOOP_HOME: $HADOOP_HOME"
@@ -102,6 +113,16 @@ for W in "${WORKERS[@]}"; do
 done
 
 sleep 5
+
+echo ""
+echo "=== Phan quyen HDFS cho user $SSH_USER ==="
+hdfs dfs -mkdir -p /data/input/retail
+hdfs dfs -chmod -R 777 /data
+hdfs dfs -chown -R "$SSH_USER":"$SSH_USER" /data
+echo "  -> /data da duoc chown cho $SSH_USER"
+
+mkdir -p "$PROJECT_ROOT/result"
+
 echo ""
 echo "=== jps (Master) ==="
 jps

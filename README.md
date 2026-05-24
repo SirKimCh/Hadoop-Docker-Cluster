@@ -4,11 +4,11 @@
 
 Triển khai cụm Hadoop 3.1.2 native trên 3 VPS Ubuntu (không dùng Docker):
 
-| Node | Vai trò | Dịch vụ |
-|---|---|---|
-| Master | NameNode | NameNode + SecondaryNameNode + ResourceManager |
-| Worker 1 | DataNode | DataNode + NodeManager |
-| Worker 2 | DataNode | DataNode + NodeManager |
+| Node | Hostname | IP | Vai trò |
+|---|---|---|---|
+| Master | nttrung-th6 | `10.32.2.236` | NameNode + SecondaryNameNode + ResourceManager |
+| Worker 1 | — | `10.32.2.213` | DataNode + NodeManager |
+| Worker 2 | — | `10.32.2.125` | DataNode + NodeManager |
 
 ---
 
@@ -51,25 +51,11 @@ source ~/.bashrc
 hadoop version
 ```
 
-### 1.4. JAVA_HOME cho Hadoop
-
-Sửa file `$HADOOP_HOME/etc/hadoop/hadoop-env.sh`:
+### 1.4. Python 3 và các thư viện
 
 ```bash
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
-```
-
-### 1.5. Python 3 và các thư viện
-
-```bash
-sudo apt install -y python3 python3-pip
+sudo apt install -y python3 python3-pip dos2unix
 pip3 install pandas matplotlib openpyxl
-```
-
-### 1.6. rsync
-
-```bash
-sudo apt install -y rsync
 ```
 
 ---
@@ -87,27 +73,32 @@ chmod 600 ~/.ssh/authorized_keys
 ### 2.2. Trên Master — Copy khóa sang 2 Worker
 
 ```bash
-ssh-copy-id ubuntu@<WORKER1_IP>
-ssh-copy-id ubuntu@<WORKER2_IP>
+ssh-copy-id ubuntu@10.32.2.213
+ssh-copy-id ubuntu@10.32.2.125
 ```
 
 ### 2.3. Kiểm tra kết nối
 
 ```bash
-ssh ubuntu@<WORKER1_IP> hostname
-ssh ubuntu@<WORKER2_IP> hostname
+ssh ubuntu@10.32.2.213 hostname
+ssh ubuntu@10.32.2.125 hostname
 ```
 
 ---
 
 ## Bước 3: Điền file `.env` và chạy script đồng bộ cụm
 
-### 3.1. Cấu hình `.env`
-
-Trên **Master**, copy file mẫu và điền IP thực tế:
+### 3.1. Clone dự án
 
 ```bash
-cd /path/to/Hadoop-Docker-Cluster
+cd /home/ubuntu
+git clone https://github.com/SirKimCh/Hadoop-Docker-Cluster.git
+cd Hadoop-Docker-Cluster
+```
+
+### 3.2. Cấu hình `.env`
+
+```bash
 cp .env.example .env
 nano .env
 ```
@@ -115,47 +106,50 @@ nano .env
 Nội dung `.env`:
 
 ```
-MASTER_IP=<IP_Master>
-WORKER1_IP=<IP_Worker1>
-WORKER2_IP=<IP_Worker2>
+MASTER_IP=10.32.2.236
+WORKER1_IP=10.32.2.213
+WORKER2_IP=10.32.2.125
 SSH_USER=ubuntu
 HADOOP_HOME=/opt/hadoop
+JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 ```
 
-### 3.2. Chạy script đồng bộ cấu hình
+### 3.3. Cấp quyền và đồng bộ cấu hình
 
 ```bash
-chmod +x scripts/sync_cluster_config.sh
+chmod +x scripts/*.sh
 ./scripts/sync_cluster_config.sh
 ```
 
 Script sẽ:
 1. Đọc IP từ file `.env`
-2. Sinh 4 file XML (`core-site.xml`, `hdfs-site.xml`, `yarn-site.xml`, `mapred-site.xml`) và file `workers`
+2. Sinh 5 file: `core-site.xml`, `hdfs-site.xml`, `yarn-site.xml`, `mapred-site.xml`, `hadoop-env.sh`
 3. Copy cấu hình vào `$HADOOP_HOME/etc/hadoop/` trên Master
-4. Dùng `rsync` đẩy cấu hình sang 2 Worker
+4. Dùng `rsync` đẩy cấu hình sang 2 Worker (bao gồm `JAVA_HOME` trong `hadoop-env.sh`)
 
 ---
 
 ## Bước 4: Format NameNode và Start Cluster
 
-### 4.1. Khởi động cụm Hadoop
-
-Trên **Master**:
-
 ```bash
-chmod +x scripts/start-hadoop.sh
 ./scripts/start-hadoop.sh
 ```
 
-Script sẽ:
-1. Format HDFS (lần đầu tiên)
-2. Khởi động NameNode và SecondaryNameNode trên Master
-3. SSH sang 2 Worker, khởi động DataNode và NodeManager
-4. Khởi động ResourceManager trên Master
-5. Chạy `jps` để xác nhận
+Script tự động thực hiện toàn bộ chu trình (không cần `sudo` — script tự xử lý):
 
-### 4.2. Xác nhận cluster hoạt động
+```
+[0] Kiểm tra SSH + Java tồn tại trên cả 2 Worker
+[0] Dừng toàn bộ daemon cũ (nếu có)
+[1] Format HDFS
+[2] Start NameNode + SecondaryNameNode trên Master
+[3] Start DataNode trên 2 Worker (qua SSH)
+[4] Start ResourceManager trên Master
+[5] Start NodeManager trên 2 Worker (qua SSH)
+[6] Phân quyền HDFS: chown /data cho user ubuntu
+[7] jps + hdfs dfsadmin -report
+```
+
+### Xác nhận cluster hoạt động
 
 Kết quả `jps` trên Master:
 
@@ -185,7 +179,6 @@ Kết quả mong đợi: `Live datanodes (2):`
 ### Câu 1 — Đếm hóa đơn duy nhất theo quốc gia
 
 ```bash
-chmod +x scripts/run-retail-q1.sh
 ./scripts/run-retail-q1.sh
 ```
 
@@ -200,132 +193,7 @@ Script tự động thực hiện toàn bộ chu trình:
 ### Câu 2 — Đếm khách hàng duy nhất theo quốc gia
 
 ```bash
-chmod +x scripts/run-retail-q2.sh
 ./scripts/run-retail-q2.sh
-```
-
----
-
-## Bước 6: Triển khai nhanh qua GitHub (CI/CD)
-
-Toàn bộ mã nguồn dự án được quản lý trên GitHub. Đồng đội trên VPS chỉ cần clone repo và chạy script tự động.
-
-### 6.1. Clone dự án từ GitHub
-
-Trên **Master VPS** (`10.32.2.236`):
-
-```bash
-cd /home/ubuntu
-git clone https://github.com/SirKimCh/Hadoop-Docker-Cluster.git
-cd Hadoop-Docker-Cluster
-```
-
-### 6.2. Cấu hình `.env`
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Điền IP thực tế:
-
-```
-MASTER_IP=10.32.2.236
-WORKER1_IP=10.32.2.213
-WORKER2_IP=10.32.2.125
-SSH_USER=ubuntu
-HADOOP_HOME=/opt/hadoop
-```
-
-### 6.3. Cấp quyền thực thi cho tất cả script
-
-```bash
-chmod +x scripts/*.sh
-```
-
-### 6.4. Triển khai tự động toàn cụm
-
-Chạy tuần tự trên **Master**:
-
-```bash
-# Bước A: Đồng bộ cấu hình Hadoop sang 2 Worker
-./scripts/sync_cluster_config.sh
-
-# Bước B: Khởi động cụm Hadoop
-./scripts/start-hadoop.sh
-
-# Bước C: Chạy benchmark Câu 1 (tự động compile, chạy 6 Mapper x 3 lần, xuất Excel + Chart)
-./scripts/run-retail-q1.sh
-
-# Bước D: Chạy benchmark Câu 2
-./scripts/run-retail-q2.sh
-```
-
-### 6.5. Pull cập nhật mới nhất
-
-Khi đồng đội push code mới lên GitHub, trên Master chỉ cần:
-
-```bash
-cd /home/ubuntu/Hadoop-Docker-Cluster
-git pull origin main
-```
-
-Sau đó chạy lại script cần thiết. File `.env` đã nằm trong `.gitignore` nên không bị ghi đè khi pull.
-
-### 6.6. Luồng triển khai tổng thể
-
-```
-Developer (local)
-    │
-    │  git push origin main
-    ▼
-GitHub: SirKimCh/Hadoop-Docker-Cluster
-    │
-    │  git pull origin main
-    ▼
-Master VPS (10.32.2.236)
-    │
-    │  ./scripts/sync_cluster_config.sh  (rsync XML + workers)
-    ├──► Worker 1 (10.32.2.213)
-    └──► Worker 2 (10.32.2.125)
-    │
-    │  ./scripts/run-retail-q1.sh  (compile → HDFS → MapReduce → Python)
-    ▼
-result/<timestamp>_Q1/
-    ├── part-r-00000          (kết quả MapReduce)
-    ├── q1_raw_times.csv      (thời gian thô)
-    ├── q1_benchmark_*.xlsx   (Excel)
-    └── q1_speedup_chart_*.png (biểu đồ)
-```
-
-### 6.7. Khắc phục lỗi thường gặp
-
-**Lỗi `namenode can only be executed by root`:**
-Script `start-hadoop.sh` đã tự xử lý — tự động chạy lại với sudo.
-
-**Lỗi `JAVA_HOME is not set`:**
-Script đã hardcode `JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64` và truyền qua sudo. Đảm bảo Java 8 đã cài: `java -version`.
-
-**Lỗi `Permission denied` khi SSH sang Worker:**
-Đảm bảo đã thiết lập SSH passwordless cho user `ubuntu` (không phải root):
-```bash
-ssh-keygen -t rsa -P "" -f ~/.ssh/id_rsa
-ssh-copy-id ubuntu@10.32.2.213
-ssh-copy-id ubuntu@10.32.2.125
-```
-
-**Lỗi `bad interpreter: /bin/bash^M`:**
-Do Windows line endings. Khắc phục:
-```bash
-sudo apt install -y dos2unix
-dos2unix scripts/*.sh scripts/*.py
-```
-
-**Kiểm tra trạng thái cluster:**
-```bash
-jps                           # Các daemon đang chạy
-hdfs dfsadmin -report         # Số DataNode sống
-yarn node -list               # Các NodeManager
 ```
 
 ---
@@ -337,7 +205,7 @@ Mỗi lần chạy benchmark tạo thư mục `result/<ngày-giờ>_Q1/` (hoặc
 | File | Mô tả |
 |---|---|
 | `part-r-00000` | Kết quả MapReduce (Country, Count) |
-| `q1_raw_times.csv` | Thời gian thô: Mapper, Run, Time |
+| `q1_raw_times.csv` | Thời gian thô: `So Mapper,Lan chay,Thoi gian` |
 | `q1_benchmark_<timestamp>.xlsx` | Bảng số liệu Excel (Run 1/2/3, Avg Time, Speedup) |
 | `q1_speedup_chart_<timestamp>.png` | Biểu đồ Bar (Time) + Line (Speedup) |
 
@@ -356,7 +224,8 @@ online_retail_II.csv
 │  1. Bỏ qua dòng header                                      │
 │  2. Tách CSV bằng regex: ,(?=(?:[^"]*"[^"]*")*[^"]*$)      │
 │  3. Clean ngoặc kép: replaceAll("^\"|\"$", "").trim()       │
-│  4. Emit key=Country, value=Invoice                         │
+│  4. Ép số Mapper: split.maxsize = fileSize / numMappers     │
+│  5. Emit key=Country, value=Invoice                         │
 └─────────────────────────────────────────────────────────────┘
         │
         ▼  Shuffle & Sort
@@ -394,7 +263,8 @@ online_retail_II.csv
 │  2. Tách CSV bằng regex                                     │
 │  3. Clean ngoặc kép cho tất cả trường                       │
 │  4. Lọc: bỏ Invoice bắt đầu bằng "C", bỏ Customer ID rỗng  │
-│  5. Emit key=Country, value=CustomerID                      │
+│  5. Ép số Mapper: split.maxsize = fileSize / numMappers     │
+│  6. Emit key=Country, value=CustomerID                      │
 └─────────────────────────────────────────────────────────────┘
         │
         ▼  Shuffle & Sort
@@ -411,8 +281,67 @@ online_retail_II.csv
 
 | Giao diện | Địa chỉ | Chức năng |
 |---|---|---|
-| HDFS NameNode UI | `http://<MASTER_IP>:9870` | Trạng thái NameNode, DataNode, duyệt file HDFS |
-| YARN ResourceManager UI | `http://<MASTER_IP>:8088` | Jobs, trạng thái cluster, NodeManagers |
+| HDFS NameNode UI | `http://10.32.2.236:9870` | Trạng thái NameNode, DataNode, duyệt file HDFS |
+| YARN ResourceManager UI | `http://10.32.2.236:8088` | Jobs, trạng thái cluster, NodeManagers |
+
+---
+
+## Khắc phục lỗi thường gặp
+
+**Lỗi `namenode can only be executed by root`:**
+Script `start-hadoop.sh` tự xử lý — tự động chạy lại với sudo.
+
+**Lỗi `JAVA_HOME is not set`:**
+Script hardcode `JAVA_HOME` và truyền qua sudo + SSH. Đảm bảo Java 8 đã cài trên cả 3 VPS.
+
+**Lỗi `secondarynamenode is running as process XXXX`:**
+Script tự dừng daemon cũ trước khi khởi động. Nếu vẫn lỗi, dừng thủ công:
+```bash
+sudo -E /opt/hadoop/bin/hdfs --daemon stop secondarynamenode
+sudo -E /opt/hadoop/bin/hdfs --daemon stop namenode
+sudo -E /opt/hadoop/bin/yarn --daemon stop resourcemanager
+```
+
+**Lỗi `Permission denied` khi SSH sang Worker:**
+SSH passwordless phải thiết lập cho user `ubuntu` (không phải root):
+```bash
+ssh-keygen -t rsa -P "" -f ~/.ssh/id_rsa
+ssh-copy-id ubuntu@10.32.2.213
+ssh-copy-id ubuntu@10.32.2.125
+```
+
+**Lỗi HDFS permission denied khi chạy benchmark:**
+Script `start-hadoop.sh` đã tự `chown /data` cho user `ubuntu`. Nếu vẫn lỗi:
+```bash
+sudo -E hdfs dfs -chmod -R 777 /data
+sudo -E hdfs dfs -chown -R ubuntu /data
+```
+
+**Lỗi `bad interpreter: /bin/bash^M`:**
+Do Windows line endings:
+```bash
+dos2unix scripts/*.sh scripts/*.py
+```
+
+**Kiểm tra trạng thái cluster:**
+```bash
+jps                           # Các daemon đang chạy
+hdfs dfsadmin -report         # Số DataNode sống
+yarn node -list               # Các NodeManager
+```
+
+---
+
+## Pull cập nhật mới nhất
+
+Khi đồng đội push code mới lên GitHub, trên Master chỉ cần:
+
+```bash
+cd ~/Hadoop-Docker-Cluster
+git pull origin main
+```
+
+File `.env` nằm trong `.gitignore` nên không bị ghi đè khi pull.
 
 ---
 
@@ -421,9 +350,10 @@ online_retail_II.csv
 ```
 Hadoop-Docker-Cluster/
 ├── .env.example                    # Template biến môi trường
+├── .env                            # Biến môi trường thật (gitignored)
 ├── scripts/
 │   ├── sync_cluster_config.sh      # Sinh & đồng bộ cấu hình từ .env
-│   ├── start-hadoop.sh             # Format HDFS, khởi động HDFS + YARN
+│   ├── start-hadoop.sh             # Stop old daemons, format, start cluster, set HDFS permissions
 │   ├── run-retail-q1.sh            # Benchmark Câu 1 (6 Mapper x 3 lần)
 │   ├── run-retail-q2.sh            # Benchmark Câu 2 (6 Mapper x 3 lần)
 │   ├── plot_speedup_q1.py          # Phân tích & xuất Excel/Chart Câu 1

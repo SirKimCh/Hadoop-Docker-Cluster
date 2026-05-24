@@ -62,6 +62,8 @@ pip3 install pandas matplotlib openpyxl
 
 ## Bước 2: Cấu hình SSH không mật khẩu từ Master sang 2 Worker
 
+> **QUAN TRỌNG:** Tất cả các bước bên dưới phải chạy trên **Master** (`nttrung-th6`, `10.32.2.236`). Không chạy từ máy khác.
+
 ### 2.1. Trên Master — Tạo cặp khóa SSH
 
 ```bash
@@ -90,7 +92,7 @@ ssh ubuntu@10.32.2.125 hostname
 
 Hadoop daemon (DataNode, NodeManager) yêu cầu chạy với quyền root. Cần cấp sudo không cần mật khẩu cho user `ubuntu` trên cả 2 Worker.
 
-### Cách 1: Tự động (chạy trên Master)
+### Cách 1: Tự động (PHẢI chạy trên Master)
 
 ```bash
 chmod +x scripts/setup-worker-sudo.sh
@@ -175,14 +177,17 @@ Script tự động thực hiện toàn bộ chu trình (không cần `sudo` —
 
 ```
 [0] Kiểm tra SSH + Java tồn tại trên cả 2 Worker
-[0] Dừng toàn bộ daemon cũ (nếu có)
+[0] Dừng toàn bộ daemon cũ (nếu có), đợi process kết thúc hoàn toàn
 [1] Format HDFS
 [2] Start NameNode + SecondaryNameNode trên Master
+    → Chờ NameNode sẵn sàng (kiểm tra port 9000, tối đa 30s)
 [3] Start DataNode trên 2 Worker (qua SSH)
 [4] Start ResourceManager trên Master
+    → Chờ ResourceManager sẵn sàng (kiểm tra port 8088, tối đa 30s)
 [5] Start NodeManager trên 2 Worker (qua SSH)
-[6] Phân quyền HDFS: chown /data cho user ubuntu
-[7] jps + hdfs dfsadmin -report
+[6] Đợi 10s cho tất cả daemon ổn định
+[7] Kiểm tra HDFS sẵn sàng, phân quyền /data cho user ubuntu
+[8] jps + hdfs dfsadmin -report
 ```
 
 ### Xác nhận cluster hoạt động
@@ -323,6 +328,25 @@ online_retail_II.csv
 ---
 
 ## Khắc phục lỗi thường gặp
+
+> **Lưu ý:** Tất cả lệnh trong dự án phải chạy trên **Master** (`nttrung-th6`). Nếu chạy từ máy khác sẽ gặp lỗi SSH hỏi mật khẩu hoặc kết nối bị từ chối.
+
+**Lỗi `Connection refused` khi kết nối `10.32.2.236:9000`:**
+NameNode chưa khởi động hoàn tất. Script `start-hadoop.sh` đã tự kiểm tra port 9000 trước khi tiếp tục. Nếu vẫn lỗi:
+```bash
+jps | grep NameNode                              # Kiểm tra NameNode có chạy không
+cat /opt/hadoop/logs/*namenode*.log | tail -50     # Xem log lỗi
+sudo /opt/hadoop/bin/hdfs --daemon stop namenode   # Dừng rồi chạy lại
+./scripts/start-hadoop.sh
+```
+
+**Lỗi SSH hỏi mật khẩu khi chạy `setup-worker-sudo.sh` hoặc `start-hadoop.sh`:**
+Đang chạy từ máy khác, không phải từ Master. Phải SSH vào Master trước:
+```bash
+ssh ubuntu@10.32.2.236
+cd ~/Hadoop-Docker-Cluster
+./scripts/setup-worker-sudo.sh
+```
 
 **Lỗi `namenode can only be executed by root`:**
 Script `start-hadoop.sh` tự xử lý — tự động chạy lại với sudo.

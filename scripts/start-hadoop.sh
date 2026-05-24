@@ -39,7 +39,7 @@ export YARN_RESOURCEMANAGER_USER=root
 export YARN_NODEMANAGER_USER=root
 
 SSH_KEY="/home/$SSH_USER/.ssh/id_rsa"
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5"
+SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
 if [ -f "$SSH_KEY" ]; then
     SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
 fi
@@ -60,6 +60,9 @@ while IFS= read -r line; do
     [ -n "$trimmed" ] && WORKERS+=("$trimmed")
 done < "$WORKERS_FILE"
 
+# ============================================================
+# Kiem tra SSH + Java tren Workers
+# ============================================================
 echo "=== Kiem tra ket noi SSH va Java tren Workers ==="
 for W in "${WORKERS[@]}"; do
     echo -n "  $SSH_USER@$W ... "
@@ -68,22 +71,55 @@ for W in "${WORKERS[@]}"; do
     else
         echo "FAIL"
         echo "ERROR: Khong the SSH hoac khong tim thay Java tren $W"
+        echo "  -> Dam bao SSH key da duoc cau hinh tu Master sang Worker"
+        echo "  -> Dam bao Java 8 da duoc cai dat tren Worker"
         exit 1
     fi
 done
 echo ""
 
+# ============================================================
+# Dung toan bo daemon cu
+# ============================================================
 echo "=== Dung toan bo daemon cu (neu co) ==="
-$HADOOP_HOME/bin/yarn --daemon stop nodemanager 2>/dev/null || true
-$HADOOP_HOME/bin/yarn --daemon stop resourcemanager 2>/dev/null || true
-$HADOOP_HOME/bin/hdfs --daemon stop secondarynamenode 2>/dev/null || true
-$HADOOP_HOME/bin/hdfs --daemon stop namenode 2>/dev/null || true
-for W in "${WORKERS[@]}"; do
-    ssh $SSH_OPTS "$SSH_USER@$W" "sudo $HADOOP_HOME/bin/hdfs --daemon stop datanode 2>/dev/null; sudo $HADOOP_HOME/bin/yarn --daemon stop nodemanager 2>/dev/null; true"
+
+# Stop Master daemons
+for svc in namenode secondarynamenode resourcemanager; do
+    if jps 2>/dev/null | grep -qi "$svc"; then
+        echo "  Dung $svc tren Master..."
+        if [ "$svc" = "resourcemanager" ]; then
+            $HADOOP_HOME/bin/yarn --daemon stop resourcemanager 2>/dev/null || true
+        else
+            $HADOOP_HOME/bin/hdfs --daemon stop $svc 2>/dev/null || true
+        fi
+    fi
 done
+
+# Stop Worker daemons
+for W in "${WORKERS[@]}"; do
+    echo "  Dung daemon tren $SSH_USER@$W..."
+    ssh $SSH_OPTS "$SSH_USER@$W" "
+        sudo $HADOOP_HOME/bin/hdfs --daemon stop datanode 2>/dev/null || true
+        sudo $HADOOP_HOME/bin/yarn --daemon stop nodemanager 2>/dev/null || true
+    "
+done
+
+# Doi cac process ket thuc hoan toan
+sleep 3
 echo "  -> Da dung tat ca daemon cu"
 echo ""
 
+# ============================================================
+# Kiem tra port 9000 trong truoc khi format
+# ============================================================
+if ss -tlnp 2>/dev/null | grep -q ":9000 " || netstat -tlnp 2>/dev/null | grep -q ":9000 "; then
+    echo "WARNING: Port 9000 van dang bi chiem. Doi them 5 giay..."
+    sleep 5
+fi
+
+# ============================================================
+# Khoi dong Hadoop Cluster
+# ============================================================
 echo "=== Khoi dong Hadoop Cluster ==="
 echo "JAVA_HOME  : $JAVA_HOME"
 echo "HADOOP_HOME: $HADOOP_HOME"
@@ -93,39 +129,106 @@ echo ""
 
 echo "[1/5] Format HDFS..."
 $HADOOP_HOME/bin/hdfs namenode -format -force
+echo ""
 
 echo "[2/5] Start NameNode + SecondaryNameNode..."
 $HADOOP_HOME/bin/hdfs --daemon start namenode
 $HADOOP_HOME/bin/hdfs --daemon start secondarynamenode
-echo "  -> Master: NameNode + SecondaryNameNode started"
+echo "  -> Dang khoi dong NameNode..."
+
+# Cho NameNode san sang (kiem tra port 9000)
+NN_READY=false
+for i in $(seq 1 15); do
+    if ss -tlnp 2>/dev/null | grep -q ":9000 " || netstat -tlnp 2>/dev/null | grep -q ":9000 "; then
+        NN_READY=true
+        break
+    fi
+    sleep 2
+done
+
+if [ "$NN_READY" = true ]; then
+    echo "  -> Master: NameNode + SecondaryNameNode started (port 9000 OK)"
+else
+    echo "  -> WARNING: NameNode chua san sang sau 30s. Kiem tra log:"
+    echo "     cat $HADOOP_HOME/logs/*namenode*.log | tail -50"
+    echo "  -> Van tiep tuc..."
+fi
+echo ""
 
 echo "[3/5] Start DataNode tren Workers..."
 for W in "${WORKERS[@]}"; do
     ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/hdfs --daemon start datanode"
     echo "  -> $SSH_USER@$W: DataNode started"
 done
+echo ""
 
 echo "[4/5] Start ResourceManager..."
 $HADOOP_HOME/bin/yarn --daemon start resourcemanager
-echo "  -> Master: ResourceManager started"
+echo "  -> Dang khoi dong ResourceManager..."
+
+# Cho ResourceManager san sang (kiem tra port 8088)
+RM_READY=false
+for i in $(seq 1 15); do
+    if ss -tlnp 2>/dev/null | grep -q ":8088 " || netstat -tlnp 2>/dev/null | grep -q ":8088 "; then
+        RM_READY=true
+        break
+    fi
+    sleep 2
+done
+
+if [ "$RM_READY" = true ]; then
+    echo "  -> Master: ResourceManager started (port 8088 OK)"
+else
+    echo "  -> WARNING: ResourceManager chua san sang sau 30s. Kiem tra log:"
+    echo "     cat $HADOOP_HOME/logs/*resourcemanager*.log | tail -50"
+fi
+echo ""
 
 echo "[5/5] Start NodeManager tren Workers..."
 for W in "${WORKERS[@]}"; do
     ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME $HADOOP_HOME/bin/yarn --daemon start nodemanager"
     echo "  -> $SSH_USER@$W: NodeManager started"
 done
+echo ""
 
-sleep 5
+# Doi tat ca daemon on dinh
+echo "Doi cac daemon on dinh (10 giay)..."
+sleep 10
 
+# ============================================================
+# Phan quyen HDFS
+# ============================================================
 echo ""
 echo "=== Phan quyen HDFS cho user $SSH_USER ==="
-hdfs dfs -mkdir -p /data/input/retail
-hdfs dfs -chmod -R 777 /data
-hdfs dfs -chown -R "$SSH_USER":"$SSH_USER" /data
-echo "  -> /data da duoc chown cho $SSH_USER"
+
+# Kiem tra HDFS da san sang chua
+HDFS_OK=false
+for i in $(seq 1 5); do
+    if hdfs dfs -ls / 2>/dev/null; then
+        HDFS_OK=true
+        break
+    fi
+    echo "  HDFS chua san sang, doi 5 giay..."
+    sleep 5
+done
+
+if [ "$HDFS_OK" = true ]; then
+    hdfs dfs -mkdir -p /data/input/retail
+    hdfs dfs -chmod -R 777 /data
+    hdfs dfs -chown -R "$SSH_USER":"$SSH_USER" /data
+    echo "  -> /data da duoc chown cho $SSH_USER"
+else
+    echo "  -> WARNING: HDFS chua san sang. Chay lai sau:"
+    echo "     hdfs dfs -mkdir -p /data/input/retail"
+    echo "     hdfs dfs -chmod -R 777 /data"
+    echo "     hdfs dfs -chown -R $SSH_USER /data"
+fi
 
 mkdir -p "$PROJECT_ROOT/result"
 
+# ============================================================
+# Kiem tra ket qua
+# ============================================================
 echo ""
 echo "=== jps (Master) ==="
 jps
@@ -134,9 +237,14 @@ echo ""
 echo "=== jps (Workers) ==="
 for W in "${WORKERS[@]}"; do
     echo "  $SSH_USER@$W:"
-    ssh $SSH_OPTS "$SSH_USER@$W" "jps" 2>/dev/null | grep -E "DataNode|NodeManager" || echo "    (chua khoi dong)"
+    ssh $SSH_OPTS "$SSH_USER@$W" "sudo JAVA_HOME=$JAVA_HOME jps" 2>/dev/null | grep -E "DataNode|NodeManager" || echo "    (chua khoi dong)"
 done
 echo ""
 
 echo "=== Cluster Status ==="
 hdfs dfsadmin -report 2>/dev/null | grep "Live datanodes" || echo "Dang khoi dong, doi vai giay..."
+
+echo ""
+echo "=== HOAN THANH ==="
+echo "Kiem tra tai: http://$(hostname -I | awk '{print $1}'):9870 (HDFS)"
+echo "             http://$(hostname -I | awk '{print $1}'):8088 (YARN)"

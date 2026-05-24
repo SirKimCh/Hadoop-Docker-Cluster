@@ -4,6 +4,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DATA_DIR="$PROJECT_ROOT/data"
+
+# Load environment
+ENV_FILE="$PROJECT_ROOT/.env"
+if [ -f "$ENV_FILE" ]; then
+    source "$ENV_FILE"
+fi
+export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-8-openjdk-amd64}"
+export HADOOP_HOME="${HADOOP_HOME:-/opt/hadoop}"
+export PATH="$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH"
 RESULT_DIR="$PROJECT_ROOT/result"
 
 MAPPERS=(1 2 5 10 20 30)

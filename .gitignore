@@ -3,6 +3,22 @@
 
 # Log file
 *.log
+logs/
+cmd_logs/
+*.out
+*.out.*
+stdout
+stderr
+syslog
+syslog.shuffle
+prelaunch.out
+prelaunch.err
+launch_container.sh
+directory.info
+
+# Runtime benchmark/result files
+data/*_times.tsv
+cmd_logs/*.csv
 
 # BlueJ files
 *.ctxt

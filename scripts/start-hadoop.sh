@@ -139,32 +139,71 @@ $HADOOP_HOME/bin/hdfs namenode -format -force
 echo ""
 
 echo "[2/5] Start NameNode + SecondaryNameNode..."
+
+# Thu daemon mode truoc
 set +e
-$HADOOP_HOME/bin/hdfs --daemon start namenode
-$HADOOP_HOME/bin/hdfs --daemon start secondarynamenode
+$HADOOP_HOME/bin/hdfs --daemon start namenode 2>&1
+NN_RC=$?
 set -e
 
-# Cho NameNode san sang — dung jps kiem tra process
-NN_READY=false
-for i in $(seq 1 20); do
-    if jps 2>/dev/null | grep -q "NameNode"; then
-        # NameNode process ton tai, thu ket noi
+sleep 3
+
+# Kiem tra NameNode co chay thuc su khong
+NN_RUNNING=false
+if jps 2>/dev/null | grep -q "NameNode"; then
+    NN_RUNNING=true
+fi
+
+# Neu daemon mode that bai, dung nohup chay truc tiep
+if [ "$NN_RUNNING" = false ]; then
+    echo "  -> Daemon mode that bai (rc=$NN_RC). Dung nohup chay truc tiep..."
+    nohup $HADOOP_HOME/bin/hdfs namenode > $HADOOP_HOME/logs/namenode-nohup.out 2>&1 &
+    NN_PID=$!
+    echo "  -> NameNode PID: $NN_PID"
+    sleep 5
+
+    if kill -0 $NN_PID 2>/dev/null; then
+        echo "  -> NameNode dang chay (PID $NN_PID)"
+        NN_RUNNING=true
+    else
+        echo "  -> NameNode PID $NN_PID da ket thuc!"
+        echo "  -> Log:"
+        tail -20 $HADOOP_HOME/logs/namenode-nohup.out 2>/dev/null || echo "    Khong co log"
+    fi
+fi
+
+# Start SecondaryNameNode
+set +e
+$HADOOP_HOME/bin/hdfs --daemon start secondarynamenode 2>&1
+set -e
+
+# Cho NameNode san sang
+if [ "$NN_RUNNING" = true ]; then
+    NN_READY=false
+    for i in $(seq 1 20); do
         if hdfs dfs -ls / >/dev/null 2>&1; then
             NN_READY=true
             break
         fi
-    fi
-    sleep 2
-done
+        sleep 2
+    done
 
-if [ "$NN_READY" = true ]; then
-    echo "  -> Master: NameNode + SecondaryNameNode started OK"
+    if [ "$NN_READY" = true ]; then
+        echo "  -> Master: NameNode + SecondaryNameNode started OK"
+    else
+        echo "  -> WARNING: NameNode chua san sang nhung process van chay. Doi them..."
+        sleep 10
+        if hdfs dfs -ls / >/dev/null 2>&1; then
+            echo "  -> Master: NameNode + SecondaryNameNode started OK (cham)"
+        else
+            echo "  -> ERROR: NameNode khong phuc vu duoc. Kiem tra log."
+            tail -20 $HADOOP_HOME/logs/*namenode*.log 2>/dev/null
+            exit 1
+        fi
+    fi
 else
     echo "  -> ERROR: NameNode khong the khoi dong!"
-    echo "     Kiem tra log: cat $HADOOP_HOME/logs/*namenode*.log | tail -80"
-    echo "     jps hien tai:"
-    jps
-    echo "  -> Dung lai. Sua loi truoc khi tiep tuc."
+    jps 2>&1
     exit 1
 fi
 echo ""
@@ -177,25 +216,44 @@ done
 echo ""
 
 echo "[4/5] Start ResourceManager..."
+
+# Thu daemon mode truoc
 set +e
-$HADOOP_HOME/bin/yarn --daemon start resourcemanager
+$HADOOP_HOME/bin/yarn --daemon start resourcemanager 2>&1
+RM_RC=$?
 set -e
 
-# Cho ResourceManager san sang
-RM_READY=false
-for i in $(seq 1 20); do
-    if jps 2>/dev/null | grep -q "ResourceManager"; then
-        RM_READY=true
-        break
-    fi
-    sleep 2
-done
+sleep 3
 
-if [ "$RM_READY" = true ]; then
+# Kiem tra ResourceManager co chay thuc su khong
+RM_RUNNING=false
+if jps 2>/dev/null | grep -q "ResourceManager"; then
+    RM_RUNNING=true
+fi
+
+# Neu daemon mode that bai, dung nohup chay truc tiep
+if [ "$RM_RUNNING" = false ]; then
+    echo "  -> Daemon mode that bai (rc=$RM_RC). Dung nohup chay truc tiep..."
+    nohup $HADOOP_HOME/bin/yarn resourcemanager > $HADOOP_HOME/logs/resourcemanager-nohup.out 2>&1 &
+    RM_PID=$!
+    echo "  -> ResourceManager PID: $RM_PID"
+    sleep 5
+
+    if kill -0 $RM_PID 2>/dev/null; then
+        echo "  -> ResourceManager dang chay (PID $RM_PID)"
+        RM_RUNNING=true
+    else
+        echo "  -> ResourceManager PID $RM_PID da ket thuc!"
+        echo "  -> Log:"
+        tail -20 $HADOOP_HOME/logs/resourcemanager-nohup.out 2>/dev/null || echo "    Khong co log"
+    fi
+fi
+
+if [ "$RM_RUNNING" = true ]; then
     echo "  -> Master: ResourceManager started OK"
 else
     echo "  -> ERROR: ResourceManager khong the khoi dong!"
-    echo "     Kiem tra log: cat $HADOOP_HOME/logs/*resourcemanager*.log | tail -80"
+    tail -20 $HADOOP_HOME/logs/*resourcemanager*.log 2>/dev/null
     exit 1
 fi
 echo ""

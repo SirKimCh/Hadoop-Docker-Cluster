@@ -338,6 +338,7 @@ hdfs dfs -chown -R "$SSH_USER":"$SSH_USER" /data
 echo "  -> /data da duoc chown cho $SSH_USER"
 
 mkdir -p "$PROJECT_ROOT/result"
+chown -R "$SSH_USER":"$SSH_USER" "$PROJECT_ROOT/result"
 
 # ============================================================
 # Kiem tra ket qua

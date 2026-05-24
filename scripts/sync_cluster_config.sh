@@ -54,7 +54,15 @@ cat > "$TMP_DIR/hdfs-site.xml" <<EOF
     </property>
     <property>
         <name>dfs.replication</name>
-        <value>3</value>
+        <value>2</value>
+    </property>
+    <property>
+        <name>dfs.namenode.rpc-bind-host</name>
+        <value>0.0.0.0</value>
+    </property>
+    <property>
+        <name>dfs.namenode.http-bind-host</name>
+        <value>0.0.0.0</value>
     </property>
 </configuration>
 EOF

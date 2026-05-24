@@ -117,6 +117,19 @@ if jps 2>/dev/null | grep -qi "NameNode"; then
 fi
 
 # ============================================================
+# Kiem tra IP Master co phai IP local khong
+# ============================================================
+MASTER_IP_CONF=$(grep -oP '(?<=<value>hdfs://)[^:]+' $HADOOP_HOME/etc/hadoop/core-site.xml 2>/dev/null || echo "")
+if [ -n "$MASTER_IP_CONF" ]; then
+    LOCAL_IPS=$(hostname -I 2>/dev/null || echo "")
+    if ! echo "$LOCAL_IPS" | grep -q "$MASTER_IP_CONF"; then
+        echo "WARNING: MASTER_IP ($MASTER_IP_CONF) khong phai IP local ($LOCAL_IPS)"
+        echo "  -> NameNode se bind 0.0.0.0 nhung Workers can ket noi duoc $MASTER_IP_CONF"
+        echo "  -> Neu Workers khong ket noi duoc, cap nhat MASTER_IP trong .env"
+    fi
+fi
+
+# ============================================================
 # Khoi dong Hadoop Cluster
 # ============================================================
 echo "=== Khoi dong Hadoop Cluster ==="

@@ -405,6 +405,18 @@ jps                              # Xem daemon nào đang chạy
 ```
 Nguyên nhân thường gặp: đã format NameNode trước đó → cần format lại hoặc xóa `dfs.namenode.name.dir`.
 
+**Lỗi `BindException: Cannot assign requested address [10.32.2.236:9000]`:**
+IP trong `.env` (`MASTER_IP`) không khớp IP thật của máy Master. Kiểm tra IP thật:
+```bash
+hostname -I
+```
+Cập nhật `MASTER_IP` trong `.env` thành IP thật, rồi chạy lại:
+```bash
+./scripts/sync_cluster_config.sh
+./scripts/start-hadoop.sh
+```
+Script đã cấu hình `dfs.namenode.rpc-bind-host=0.0.0.0` để NameNode bind tất cả interface, nhưng `MASTER_IP` phải đúng để Workers kết nối được.
+
 **Lỗi `bad interpreter: /bin/bash^M`:**
 Do Windows line endings:
 ```bash

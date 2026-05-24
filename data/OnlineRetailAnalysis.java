@@ -218,6 +218,69 @@ public class OnlineRetailAnalysis {
         }
     }
 
+    public static class TopCustomerOneJobMapper extends Mapper<Object, Text, Text, Text> {
+        private final Text country = new Text();
+        private final Text customerAmount = new Text();
+
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            RetailRecord record = parseRetailRecord(value.toString());
+            if (record == null || record.customerId.isEmpty()) {
+                return;
+            }
+
+            country.set(record.country);
+            customerAmount.set(record.customerId + "\t" + (record.quantity * record.price));
+            context.write(country, customerAmount);
+        }
+    }
+
+    public static class TopCustomerOneJobReducer extends Reducer<Text, Text, Text, Text> {
+        private static final DecimalFormat MONEY_FORMAT =
+                new DecimalFormat("0.00", DecimalFormatSymbols.getInstance(Locale.US));
+        private final Text result = new Text();
+
+        public void reduce(Text key, Iterable<Text> values, Context context)
+                throws IOException, InterruptedException {
+            java.util.Map<String, Double> totals = new java.util.HashMap<String, Double>();
+
+            for (Text value : values) {
+                String[] parts = value.toString().split("\t", 2);
+                if (parts.length != 2) {
+                    continue;
+                }
+
+                double amount;
+                try {
+                    amount = Double.parseDouble(parts[1]);
+                } catch (NumberFormatException ex) {
+                    continue;
+                }
+
+                String customerId = parts[0];
+                Double current = totals.get(customerId);
+                totals.put(customerId, (current == null ? 0.0 : current) + amount);
+            }
+
+            double maxTotal = Double.NEGATIVE_INFINITY;
+            List<String> topCustomers = new ArrayList<String>();
+            for (java.util.Map.Entry<String, Double> entry : totals.entrySet()) {
+                double total = entry.getValue();
+                if (total > maxTotal) {
+                    maxTotal = total;
+                    topCustomers.clear();
+                    topCustomers.add(entry.getKey());
+                } else if (total == maxTotal) {
+                    topCustomers.add(entry.getKey());
+                }
+            }
+
+            for (String customerId : topCustomers) {
+                result.set("customer_id=" + customerId + "\ttotal=" + MONEY_FORMAT.format(maxTotal));
+                context.write(key, result);
+            }
+        }
+    }
+
     public static class CustomerPurchaseReducer extends Reducer<Text, DoubleWritable, Text, Text> {
         private final Text country = new Text();
         private final Text customerTotal = new Text();
@@ -345,33 +408,17 @@ public class OnlineRetailAnalysis {
     }
 
     private static boolean runTopCustomer(String input, String tempOutput, String finalOutput, int mapperCount) throws Exception {
-        Job totalJob = Job.getInstance(jobConfiguration(input, mapperCount), "q3 customer totals by country");
-        totalJob.setJarByClass(OnlineRetailAnalysis.class);
-        totalJob.setMapperClass(CustomerPurchaseMapper.class);
-        totalJob.setCombinerClass(DoubleSumCombiner.class);
-        totalJob.setReducerClass(CustomerPurchaseReducer.class);
-        totalJob.setMapOutputKeyClass(Text.class);
-        totalJob.setMapOutputValueClass(DoubleWritable.class);
-        totalJob.setOutputKeyClass(Text.class);
-        totalJob.setOutputValueClass(Text.class);
-        FileInputFormat.addInputPath(totalJob, new Path(input));
-        FileOutputFormat.setOutputPath(totalJob, new Path(tempOutput));
-        if (!totalJob.waitForCompletion(true)) {
-            return false;
-        }
-
-        Job topJob = Job.getInstance(jobConfiguration(tempOutput, 0), "q3 top customer by country");
-        topJob.setJarByClass(OnlineRetailAnalysis.class);
-        topJob.setMapperClass(TopCustomerMapper.class);
-        topJob.setReducerClass(TopCustomerReducer.class);
-        topJob.setMapOutputKeyClass(Text.class);
-        topJob.setMapOutputValueClass(Text.class);
-        topJob.setOutputKeyClass(Text.class);
-        topJob.setOutputValueClass(Text.class);
-        topJob.setNumReduceTasks(1);
-        FileInputFormat.addInputPath(topJob, new Path(tempOutput));
-        FileOutputFormat.setOutputPath(topJob, new Path(finalOutput));
-        return topJob.waitForCompletion(true);
+        Job job = Job.getInstance(jobConfiguration(input, mapperCount), "q3 top customer by country one job");
+        job.setJarByClass(OnlineRetailAnalysis.class);
+        job.setMapperClass(TopCustomerOneJobMapper.class);
+        job.setReducerClass(TopCustomerOneJobReducer.class);
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(Text.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+        FileInputFormat.addInputPath(job, new Path(input));
+        FileOutputFormat.setOutputPath(job, new Path(finalOutput));
+        return job.waitForCompletion(true);
     }
 
     public static void main(String[] args) throws Exception {

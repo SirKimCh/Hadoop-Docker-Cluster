@@ -2,6 +2,8 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.regex.Pattern;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
@@ -9,7 +11,6 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.NLineInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class OnlineRetailQ1 {
@@ -27,10 +28,10 @@ public class OnlineRetailQ1 {
                 return;
             }
 
-            String invoiceVal = fields[0].trim();
-            String countryVal = fields[7].trim();
+            String invoiceVal = fields[0].replaceAll("^\"|\"$", "").trim();
+            String countryVal = fields[7].replaceAll("^\"|\"$", "").trim();
 
-            if (invoiceVal.isEmpty() || invoiceVal.startsWith("C") || countryVal.isEmpty()) {
+            if (invoiceVal.isEmpty() || countryVal.isEmpty()) {
                 return;
             }
 
@@ -41,8 +42,6 @@ public class OnlineRetailQ1 {
     }
 
     public static class RetailReducer extends Reducer<Text, Text, Text, IntWritable> {
-
-        private IntWritable result = new IntWritable();
 
         public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
             HashSet<String> uniqueSet = new HashSet<>();
@@ -67,9 +66,18 @@ public class OnlineRetailQ1 {
         job.setOutputValueClass(IntWritable.class);
 
         if (args.length > 2) {
-            int linesPerMap = Integer.parseInt(args[2]);
-            job.setInputFormatClass(NLineInputFormat.class);
-            NLineInputFormat.setNumLinesPerSplit(job, linesPerMap);
+            int numMappers = Integer.parseInt(args[2]);
+            Path inputPath = new Path(args[0]);
+            FileSystem fs = inputPath.getFileSystem(conf);
+            FileStatus[] files = fs.listStatus(inputPath);
+            long totalSize = 0;
+            for (FileStatus file : files) {
+                if (file.isFile()) {
+                    totalSize += file.getLen();
+                }
+            }
+            long splitMaxSize = totalSize / numMappers;
+            conf.setLong("mapreduce.input.fileinputformat.split.maxsize", splitMaxSize);
         }
 
         FileInputFormat.addInputPath(job, new Path(args[0]));

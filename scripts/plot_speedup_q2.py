@@ -1,53 +1,56 @@
+import sys
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-CSV_FILE = '/result/q2_execution_times.csv'
+RAW_CSV = '/result/q2_raw_times.csv'
+RES_DIR = sys.argv[1] if len(sys.argv) > 1 else '/result'
 TIMESTAMP = datetime.now().strftime('%d-%m-%Y_%H-%M')
-EXCEL_FILE = f'/result/q2_results_{TIMESTAMP}.xlsx'
-CHART_FILE = f'/result/q2_speedup_{TIMESTAMP}.png'
 
-df = pd.read_csv(CSV_FILE)
+df = pd.read_csv(RAW_CSV)
 
-stats = df.groupby('Mapper')['Time'].agg(['mean', 'std', 'min', 'max']).reset_index()
-stats.columns = ['Mapper', 'Mean Time', 'Std Dev', 'Min Time', 'Max Time']
+pivot = df.pivot_table(index='Mapper', columns='Run', values='Time', aggfunc='first').reset_index()
+pivot.columns = ['Mapper'] + [f'Run {int(c)}' for c in pivot.columns[1:]]
 
-t1_mean = stats.loc[stats['Mapper'] == 1, 'Mean Time'].values[0]
-stats['Speedup'] = t1_mean / stats['Mean Time']
+pivot['Avg Time'] = df.groupby('Mapper')['Time'].mean().values
 
-overall_mean = df['Time'].mean()
-stats['Overall Mean'] = overall_mean
+t1_avg = pivot.loc[pivot['Mapper'] == 1, 'Avg Time'].values[0]
+pivot['Speedup'] = t1_avg / pivot['Avg Time']
 
+EXCEL_FILE = f'{RES_DIR}/q2_benchmark_{TIMESTAMP}.xlsx'
 with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
     df.to_excel(writer, sheet_name='Raw Data', index=False)
-    stats.to_excel(writer, sheet_name='Statistics', index=False)
+    pivot.to_excel(writer, sheet_name='Statistics', index=False)
     summary = pd.DataFrame({
-        'Metric': ['Overall Mean Time (s)', 'Best Speedup', 'Best Mapper Count'],
-        'Value': [round(overall_mean, 2), round(stats['Speedup'].max(), 2), int(stats.loc[stats['Speedup'].idxmax(), 'Mapper'])]
+        'Metric': ['Best Speedup', 'Best Mapper Count', 'Baseline Time (1 Mapper)'],
+        'Value': [
+            round(pivot['Speedup'].max(), 2),
+            int(pivot.loc[pivot['Speedup'].idxmax(), 'Mapper']),
+            round(t1_avg, 2)
+        ]
     })
     summary.to_excel(writer, sheet_name='Summary', index=False)
 
+CHART_FILE = f'{RES_DIR}/q2_speedup_chart_{TIMESTAMP}.png'
 fig, ax1 = plt.subplots(figsize=(10, 6))
 
-color1 = '#2196F3'
 ax1.set_xlabel('Number of Mappers')
-ax1.set_ylabel('Average Execution Time (seconds)', color=color1)
-ax1.plot(stats['Mapper'], stats['Mean Time'], 'o-', color=color1, linewidth=2, markersize=8)
-ax1.tick_params(axis='y', labelcolor=color1)
+ax1.set_ylabel('Average Execution Time (seconds)', color='#2196F3')
+ax1.bar(pivot['Mapper'], pivot['Avg Time'], color='#2196F3', alpha=0.7, label='Avg Time')
+ax1.tick_params(axis='y', labelcolor='#2196F3')
 
 ax2 = ax1.twinx()
-color2 = '#FF5722'
-ax2.set_ylabel('Speedup (T1/Tn)', color=color2)
-ax2.plot(stats['Mapper'], stats['Speedup'], 's--', color=color2, linewidth=2, markersize=8)
-ax2.tick_params(axis='y', labelcolor=color2)
+ax2.set_ylabel('Speedup (T1/Tn)', color='#FF5722')
+ax2.plot(pivot['Mapper'], pivot['Speedup'], 's-', color='#FF5722', linewidth=2, markersize=8, label='Speedup')
+ax2.tick_params(axis='y', labelcolor='#FF5722')
 
 plt.title('MapReduce Q2: Execution Time & Speedup')
 fig.tight_layout()
 plt.savefig(CHART_FILE, dpi=150)
 
-print(f"Excel: {EXCEL_FILE}")
-print(f"Chart: {CHART_FILE}")
+print(f"Excel : {EXCEL_FILE}")
+print(f"Chart : {CHART_FILE}")
 print()
-print(stats.to_string(index=False))
+print(pivot.to_string(index=False))

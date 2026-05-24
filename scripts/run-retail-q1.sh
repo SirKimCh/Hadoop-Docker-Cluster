@@ -1,45 +1,48 @@
 #!/bin/bash
+set -e
 
-MAPPER_COUNTS="1 2 5 10 20 30"
+MAPPERS=(1 2 5 10 20 30)
 RUNS=3
 TIMESTAMP=$(date +'%d-%m-%Y_%H-%M')
-LOG_FILE="/result/q1_execution_times.csv"
+RAW_CSV="/result/q1_raw_times.csv"
+RES_DIR="/result/${TIMESTAMP}_Q1"
+HDFS_INPUT="/data/input/retail/online_retail_II.csv"
+HDFS_OUTPUT="/data/output/retail-q1"
+LOCAL_DATA="/data/online_retail_II.csv"
 
-cd /data
+mkdir -p /result
 
 hdfs dfs -mkdir -p /data/input/retail
-hdfs dfs -test -e /data/input/retail/online_retail_II.csv || hdfs dfs -put online_retail_II.csv /data/input/retail/
+hdfs dfs -test -e "$HDFS_INPUT" || hdfs dfs -put "$LOCAL_DATA" "$HDFS_INPUT"
 
+cd /data
 javac -classpath $(hadoop classpath) OnlineRetailQ1.java
 jar cf retail-q1.jar OnlineRetailQ1*.class
 
-TOTAL_LINES=$(wc -l < /data/online_retail_II.csv)
+echo "Mapper,Run,Time" > "$RAW_CSV"
 
-mkdir -p /result
-echo "Mapper,Run,Time" > $LOG_FILE
-
-for MAPPERS in $MAPPER_COUNTS; do
-    LINES_PER_MAP=$((TOTAL_LINES / MAPPERS))
+for NMAP in "${MAPPERS[@]}"; do
     for RUN in $(seq 1 $RUNS); do
-        hdfs dfs -rm -r -f /data/output/retail-q1
+        hdfs dfs -rm -r -f "$HDFS_OUTPUT"
 
-        START_TIME=$(date +%s)
-        hadoop jar retail-q1.jar OnlineRetailQ1 /data/input/retail/online_retail_II.csv /data/output/retail-q1 $LINES_PER_MAP
-        END_TIME=$(date +%s)
-        EXEC_TIME=$((END_TIME - START_TIME))
+        START=$(date +%s)
+        hadoop jar retail-q1.jar OnlineRetailQ1 "$HDFS_INPUT" "$HDFS_OUTPUT" "$NMAP"
+        END=$(date +%s)
+        ELAPSED=$((END - START))
 
-        echo "$MAPPERS,$RUN,$EXEC_TIME" >> $LOG_FILE
-        echo "Mapper: $MAPPERS | Run: $RUN | Time: ${EXEC_TIME}s"
+        echo "${NMAP},${RUN},${ELAPSED}" >> "$RAW_CSV"
+        echo "Mapper=${NMAP} | Run=${RUN} | Time=${ELAPSED}s"
     done
 done
 
-RES_DIR="/result/${TIMESTAMP}_Q1_Experiment"
-mkdir -p $RES_DIR
-hdfs dfs -get -f /data/output/retail-q1/part-r-00000 $RES_DIR/
-cp $LOG_FILE $RES_DIR/
+mkdir -p "$RES_DIR"
+hdfs dfs -get -f "${HDFS_OUTPUT}/part-r-00000" "$RES_DIR/"
+cp "$RAW_CSV" "$RES_DIR/"
 
-echo "===== HOAN THANH ====="
-echo "Log: $LOG_FILE"
-echo "Ket qua MapReduce: $RES_DIR/part-r-00000"
 echo ""
-cat $RES_DIR/part-r-00000
+echo "===== BENCHMARK Q1 HOAN THANH ====="
+echo "Raw CSV      : $RAW_CSV"
+echo "Ket qua MR   : $RES_DIR/part-r-00000"
+echo ""
+
+python3 "$(dirname "$0")/plot_speedup_q1.py" "$RES_DIR"

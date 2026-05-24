@@ -1,27 +1,48 @@
 #!/bin/bash
+set -e
+
 export HDFS_NAMENODE_USER=root
 export HDFS_DATANODE_USER=root
 export HDFS_SECONDARYNAMENODE_USER=root
 export YARN_RESOURCEMANAGER_USER=root
 export YARN_NODEMANAGER_USER=root
-sed -i 's/\r//' /opt/hadoop/etc/hadoop/workers
-sed -i 's/\r//' /opt/hadoop/etc/hadoop/hadoop-env.sh
 
-/opt/hadoop/bin/hdfs namenode -format -force
+HADOOP_HOME="${HADOOP_HOME:-/opt/hadoop}"
+WORKERS_FILE="$HADOOP_HOME/etc/hadoop/workers"
 
-/opt/hadoop/bin/hdfs --daemon start namenode
-/opt/hadoop/bin/hdfs --daemon start secondarynamenode
+sed -i 's/\r//' "$WORKERS_FILE"
+sed -i 's/\r//' "$HADOOP_HOME/etc/hadoop/hadoop-env.sh"
 
-ssh datanode1 "/opt/hadoop/bin/hdfs --daemon start datanode"
-ssh datanode2 "/opt/hadoop/bin/hdfs --daemon start datanode"
-ssh datanode3 "/opt/hadoop/bin/hdfs --daemon start datanode"
+WORKERS=()
+while IFS= read -r line; do
+    trimmed=$(echo "$line" | tr -d '[:space:]')
+    [ -n "$trimmed" ] && WORKERS+=("$trimmed")
+done < "$WORKERS_FILE"
 
-/opt/hadoop/bin/yarn --daemon start resourcemanager
+echo "=== Khoi dong Hadoop Cluster ==="
+echo "Workers: ${WORKERS[*]}"
+echo ""
 
-ssh datanode1 "/opt/hadoop/bin/yarn --daemon start nodemanager"
-ssh datanode2 "/opt/hadoop/bin/yarn --daemon start nodemanager"
-ssh datanode3 "/opt/hadoop/bin/yarn --daemon start nodemanager"
+$HADOOP_HOME/bin/hdfs namenode -format -force
+
+$HADOOP_HOME/bin/hdfs --daemon start namenode
+$HADOOP_HOME/bin/hdfs --daemon start secondarynamenode
+echo "[Master] NameNode + SecondaryNameNode started"
+
+for W in "${WORKERS[@]}"; do
+    ssh "$W" "$HADOOP_HOME/bin/hdfs --daemon start datanode"
+    echo "[$W] DataNode started"
+done
+
+$HADOOP_HOME/bin/yarn --daemon start resourcemanager
+echo "[Master] ResourceManager started"
+
+for W in "${WORKERS[@]}"; do
+    ssh "$W" "$HADOOP_HOME/bin/yarn --daemon start nodemanager"
+    echo "[$W] NodeManager started"
+done
 
 sleep 5
+echo ""
+echo "=== jps ==="
 jps
-

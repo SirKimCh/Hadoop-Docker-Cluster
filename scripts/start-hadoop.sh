@@ -12,16 +12,15 @@ sed -i 's/\r//' /opt/hadoop/etc/hadoop/hadoop-env.sh
 /opt/hadoop/bin/hdfs --daemon start namenode
 /opt/hadoop/bin/hdfs --daemon start secondarynamenode
 
-ssh datanode1 "/opt/hadoop/bin/hdfs --daemon start datanode"
-ssh datanode2 "/opt/hadoop/bin/hdfs --daemon start datanode"
-ssh datanode3 "/opt/hadoop/bin/hdfs --daemon start datanode"
+for worker in $(cat /opt/hadoop/etc/hadoop/workers); do
+  ssh "${worker}" "/opt/hadoop/bin/hdfs --daemon start datanode"
+done
 
 /opt/hadoop/bin/yarn --daemon start resourcemanager
 
-ssh datanode1 "/opt/hadoop/bin/yarn --daemon start nodemanager"
-ssh datanode2 "/opt/hadoop/bin/yarn --daemon start nodemanager"
-ssh datanode3 "/opt/hadoop/bin/yarn --daemon start nodemanager"
+for worker in $(cat /opt/hadoop/etc/hadoop/workers); do
+  ssh "${worker}" "/opt/hadoop/bin/yarn --daemon start nodemanager"
+done
 
 sleep 5
 jps
-

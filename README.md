@@ -298,6 +298,36 @@ result/<timestamp>_Q1/
     └── q1_speedup_chart_*.png (biểu đồ)
 ```
 
+### 6.7. Khắc phục lỗi thường gặp
+
+**Lỗi `namenode can only be executed by root`:**
+Script `start-hadoop.sh` đã tự xử lý — tự động chạy lại với sudo.
+
+**Lỗi `JAVA_HOME is not set`:**
+Script đã hardcode `JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64` và truyền qua sudo. Đảm bảo Java 8 đã cài: `java -version`.
+
+**Lỗi `Permission denied` khi SSH sang Worker:**
+Đảm bảo đã thiết lập SSH passwordless cho user `ubuntu` (không phải root):
+```bash
+ssh-keygen -t rsa -P "" -f ~/.ssh/id_rsa
+ssh-copy-id ubuntu@10.32.2.213
+ssh-copy-id ubuntu@10.32.2.125
+```
+
+**Lỗi `bad interpreter: /bin/bash^M`:**
+Do Windows line endings. Khắc phục:
+```bash
+sudo apt install -y dos2unix
+dos2unix scripts/*.sh scripts/*.py
+```
+
+**Kiểm tra trạng thái cluster:**
+```bash
+jps                           # Các daemon đang chạy
+hdfs dfsadmin -report         # Số DataNode sống
+yarn node -list               # Các NodeManager
+```
+
 ---
 
 ## Kết quả đầu ra

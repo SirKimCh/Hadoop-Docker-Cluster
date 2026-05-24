@@ -1,21 +1,31 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+DATA_DIR="$PROJECT_ROOT/data"
+RESULT_DIR="$PROJECT_ROOT/result"
+
 MAPPERS=(1 2 5 10 20 30)
 RUNS=3
 TIMESTAMP=$(date +'%d-%m-%Y_%H-%M')
-RAW_CSV="/result/q2_raw_times.csv"
-RES_DIR="/result/${TIMESTAMP}_Q2"
+RAW_CSV="$RESULT_DIR/q2_raw_times.csv"
+RES_DIR="$RESULT_DIR/${TIMESTAMP}_Q2"
+LOCAL_DATA="$DATA_DIR/online_retail_II.csv"
 HDFS_INPUT="/data/input/retail/online_retail_II.csv"
 HDFS_OUTPUT="/data/output/retail-q2"
-LOCAL_DATA="/data/online_retail_II.csv"
 
-mkdir -p /result
+if [ ! -f "$LOCAL_DATA" ]; then
+    echo "ERROR: Khong tim thay du lieu tai $LOCAL_DATA"
+    exit 1
+fi
+
+mkdir -p "$RESULT_DIR"
 
 hdfs dfs -mkdir -p /data/input/retail
 hdfs dfs -test -e "$HDFS_INPUT" || hdfs dfs -put "$LOCAL_DATA" "$HDFS_INPUT"
 
-cd /data
+cd "$DATA_DIR"
 javac -classpath $(hadoop classpath) OnlineRetailQ2.java
 jar cf retail-q2.jar OnlineRetailQ2*.class
 
@@ -45,4 +55,4 @@ echo "Raw CSV      : $RAW_CSV"
 echo "Ket qua MR   : $RES_DIR/part-r-00000"
 echo ""
 
-python3 "$(dirname "$0")/plot_speedup_q2.py" "$RES_DIR"
+python3 "$SCRIPT_DIR/plot_speedup_q2.py" "$RES_DIR"

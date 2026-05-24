@@ -1,12 +1,15 @@
 import sys
+import os
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-RAW_CSV = '/result/q1_raw_times.csv'
-RES_DIR = sys.argv[1] if len(sys.argv) > 1 else '/result'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+RAW_CSV = os.path.join(PROJECT_ROOT, 'result', 'q1_raw_times.csv')
+RES_DIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(PROJECT_ROOT, 'result')
 TIMESTAMP = datetime.now().strftime('%d-%m-%Y_%H-%M')
 
 df = pd.read_csv(RAW_CSV)

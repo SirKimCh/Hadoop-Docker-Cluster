@@ -8,7 +8,7 @@ OUTPUT_DIR=/data/online_retail/output
 TEMP_DIR=/data/online_retail/tmp
 INPUT_FILE=${INPUT_DIR}/online_retail_II.csv
 SOURCE_FILE=${1:-/data/online_retail_II.csv}
-TIMES_FILE=/data/online_retail_times.tsv
+TIMES_FILE=/data/online_retail_q3_times.tsv
 MAPPER_COUNT=${MAPPER_COUNT:-0}
 
 elapsed_seconds() {
@@ -42,30 +42,14 @@ jar cf online-retail-analysis.jar OnlineRetailAnalysis*.class
 
 hdfs dfs -mkdir -p "${INPUT_DIR}"
 hdfs dfs -put -f "${SOURCE_FILE}" "${INPUT_FILE}"
-hdfs dfs -rm -r -f "${OUTPUT_DIR}" "${TEMP_DIR}"
+hdfs dfs -rm -r -f "${TEMP_DIR}/q3_customer_totals" "${OUTPUT_DIR}/q3"
 
 echo "===== Mapper count: ${MAPPER_COUNT} (0 = Hadoop default split) ====="
-
-run_job "q1_invoice_count_by_country" \
-  hadoop jar online-retail-analysis.jar OnlineRetailAnalysis invoiceCount \
-  "${INPUT_FILE}" "${TEMP_DIR}/q1_distinct_invoice" "${OUTPUT_DIR}/q1" "${MAPPER_COUNT}"
-
-run_job "q2_distinct_customer_count_by_country" \
-  hadoop jar online-retail-analysis.jar OnlineRetailAnalysis customerCount \
-  "${INPUT_FILE}" "${TEMP_DIR}/q2_distinct_customer" "${OUTPUT_DIR}/q2" "${MAPPER_COUNT}"
 
 run_job "q3_top_customer_by_country" \
   hadoop jar online-retail-analysis.jar OnlineRetailAnalysis topCustomer \
   "${INPUT_FILE}" "${TEMP_DIR}/q3_customer_totals" "${OUTPUT_DIR}/q3" "${MAPPER_COUNT}"
 
-echo "===== Cau 1: So luong hoa don theo tung quoc gia ====="
-hdfs dfs -cat "${OUTPUT_DIR}/q1/part-r-*"
-
-echo
-echo "===== Cau 2: So khach hang khac nhau theo tung quoc gia ====="
-hdfs dfs -cat "${OUTPUT_DIR}/q2/part-r-*"
-
-echo
 echo "===== Cau 3: Khach hang co gia tri mua hang cao nhat theo tung quoc gia ====="
 hdfs dfs -cat "${OUTPUT_DIR}/q3/part-r-*"
 

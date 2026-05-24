@@ -36,10 +36,10 @@ Hadoop-Docker-Cluster/
 │   ├── start-hadoop.sh             # Format HDFS, khởi động HDFS + YARN, kiểm tra jps
 │   ├── run-wordcount.sh            # Tải dữ liệu, biên dịch, đóng gói, chạy WordCount
 │   ├── run-beer-analysis.sh        # Chạy phân tích dữ liệu bia
-│   ├── run-retail-q1.sh            # Chạy bài tập Online Retail - Câu 1
-│   ├── run-retail-q2.sh            # Chạy bài tập Online Retail - Câu 2
-│   ├── plot_speedup_q1.py          # Vẽ biểu đồ Speedup Câu 1
-│   └── plot_speedup_q2.py          # Vẽ biểu đồ Speedup Câu 2
+│   ├── run-retail-q1.sh            # Thực nghiệm Câu 1 (6 Mapper x 3 lần)
+│   ├── run-retail-q2.sh            # Thực nghiệm Câu 2 (6 Mapper x 3 lần)
+│   ├── plot_speedup_q1.py          # Phân tích & xuất Excel/Chart Câu 1
+│   └── plot_speedup_q2.py          # Phân tích & xuất Excel/Chart Câu 2
 ├── data/                           # Dữ liệu đầu vào và mã nguồn Java
 │   ├── WordCount.java              # Chương trình MapReduce đếm từ
 │   ├── BeerAnalysis.java           # Phân tích dữ liệu bia
@@ -225,44 +225,47 @@ File `online_retail_II.csv` với các cột:
 - Invoice (cột 0): Mã hóa đơn
 - Country (cột 7): Quốc gia
 
-### Cách chạy
+### Cách chạy thực nghiệm
 
-**Bước 1:** Build lại image (nếu chưa build hoặc Dockerfile thay đổi):
+**Bước 1:** Build lại image (nếu Dockerfile thay đổi):
 
 ```bash
 docker compose build
 docker compose up -d
 ```
 
-**Bước 2:** Khởi động SSH trên cả 4 containers:
+**Bước 2:** Khởi động SSH và Hadoop:
 
 ```bash
 docker exec namenode bash /opt/scripts/init-ssh.sh
 docker exec datanode1 bash /opt/scripts/init-ssh.sh
 docker exec datanode2 bash /opt/scripts/init-ssh.sh
 docker exec datanode3 bash /opt/scripts/init-ssh.sh
-```
 
-**Bước 3:** Truy cập vào container namenode và khởi động Hadoop:
-
-```bash
 docker exec -it namenode bash
 /opt/scripts/start-hadoop.sh
 ```
 
-**Bước 4:** Chạy script với số Node (lặp lại cho 1, 2, 3 Node):
+**Bước 3:** Chạy thực nghiệm (tự động chạy 6 cấu hình Mapper x 3 lần):
 
 ```bash
-/opt/scripts/run-retail-q1.sh 1
-/opt/scripts/run-retail-q1.sh 2
-/opt/scripts/run-retail-q1.sh 3
+/opt/scripts/run-retail-q1.sh
 ```
 
-**Bước 5:** Vẽ biểu đồ Speedup:
+Script sẽ chạy lần lượt Mapper = 1, 2, 5, 10, 20, 30. Mỗi cấu hình chạy 3 lần.
+
+**Bước 4:** Xuất Excel và vẽ biểu đồ:
 
 ```bash
 python3 /opt/scripts/plot_speedup_q1.py
 ```
+
+### Kết quả
+
+- Log raw CSV: `result/q1_execution_times.csv`
+- File Excel: `result/q1_results_<datetime>.xlsx`
+- Biểu đồ: `result/q1_speedup_<datetime>.png`
+- Kết quả MapReduce: `result/<datetime>_Q1_Experiment/part-r-00000`
 
 ### Cấu trúc logic MapReduce
 
@@ -313,15 +316,15 @@ Một hóa đơn (Invoice) có thể có nhiều dòng trong file CSV (mỗi dò
 - File log thời gian: `result/q1_execution_times.csv`
 - Biểu đồ: `result/q1_speedup_chart.png`
 
-Kết quả ví dụ:
+Kết quả ví dụ (đã lọc bỏ hóa đơn hủy, Australia = 95 thay vì 117):
 
 ```
-Australia       117
-Austria         51
-Belgium         183
-France          746
-Germany         1095
-United Kingdom  23493
+Australia       95
+Austria         41
+Belgium         158
+France          680
+Germany         964
+United Kingdom  20675
 ...
 ```
 
@@ -357,9 +360,9 @@ online_retail_II.csv
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Cách chạy
+### Cách chạy thực nghiệm
 
-**Bước 1:** Build lại image (Dockerfile đã thay đổi):
+**Bước 1:** Build lại image (nếu Dockerfile thay đổi):
 
 ```bash
 docker compose build
@@ -378,21 +381,13 @@ docker exec -it namenode bash
 /opt/scripts/start-hadoop.sh
 ```
 
-**Bước 3:** Chạy script với số Node:
+**Bước 3:** Chạy thực nghiệm:
 
 ```bash
-/opt/scripts/run-retail-q2.sh 3
+/opt/scripts/run-retail-q2.sh
 ```
 
-**Bước 4:** Lặp lại với các số Node khác nhau (1, 2, 3):
-
-```bash
-/opt/scripts/run-retail-q2.sh 1
-/opt/scripts/run-retail-q2.sh 2
-/opt/scripts/run-retail-q2.sh 3
-```
-
-**Bước 5:** Vẽ biểu đồ:
+**Bước 4:** Xuất Excel và vẽ biểu đồ:
 
 ```bash
 python3 /opt/scripts/plot_speedup_q2.py
@@ -400,9 +395,10 @@ python3 /opt/scripts/plot_speedup_q2.py
 
 ### Kết quả
 
-- Kết quả MapReduce: `result/dd-MM-yyyy_HH-MM_Q2_XNodes/part-r-00000`
-- File log thời gian: `result/q2_execution_times.csv`
-- Biểu đồ: `result/q2_speedup_chart.png`
+- Log raw CSV: `result/q2_execution_times.csv`
+- File Excel: `result/q2_results_<datetime>.xlsx`
+- Biểu đồ: `result/q2_speedup_<datetime>.png`
+- Kết quả MapReduce: `result/<datetime>_Q2_Experiment/part-r-00000`
 
 Kết quả tự động có trên host tại `result/` nhờ volume mount.
 

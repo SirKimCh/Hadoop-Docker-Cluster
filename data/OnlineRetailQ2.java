@@ -9,6 +9,7 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.NLineInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class OnlineRetailQ2 {
@@ -20,10 +21,9 @@ public class OnlineRetailQ2 {
         private static final Pattern CSV_PATTERN = Pattern.compile(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
 
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            String line = value.toString();
-            String[] fields = CSV_PATTERN.split(line, -1);
+            String[] fields = CSV_PATTERN.split(value.toString(), -1);
 
-            if (fields.length < 8 || fields[0].contains("Invoice")) {
+            if (fields.length < 8 || fields[0].equals("Invoice")) {
                 return;
             }
 
@@ -46,14 +46,13 @@ public class OnlineRetailQ2 {
         private IntWritable result = new IntWritable();
 
         public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            HashSet<String> uniqueCustomers = new HashSet<>();
+            HashSet<String> uniqueSet = new HashSet<>();
 
             for (Text val : values) {
-                uniqueCustomers.add(val.toString());
+                uniqueSet.add(val.toString());
             }
 
-            result.set(uniqueCustomers.size());
-            context.write(key, result);
+            context.write(key, new IntWritable(uniqueSet.size()));
         }
     }
 
@@ -63,8 +62,17 @@ public class OnlineRetailQ2 {
         job.setJarByClass(OnlineRetailQ2.class);
         job.setMapperClass(RetailMapper.class);
         job.setReducerClass(RetailReducer.class);
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(Text.class);
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
+
+        if (args.length > 2) {
+            int linesPerMap = Integer.parseInt(args[2]);
+            job.setInputFormatClass(NLineInputFormat.class);
+            NLineInputFormat.setNumLinesPerSplit(job, linesPerMap);
+        }
+
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
         System.exit(job.waitForCompletion(true) ? 0 : 1);

@@ -9,6 +9,7 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.NLineInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class OnlineRetailQ1 {
@@ -20,17 +21,16 @@ public class OnlineRetailQ1 {
         private static final Pattern CSV_PATTERN = Pattern.compile(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
 
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            String line = value.toString();
-            String[] fields = CSV_PATTERN.split(line, -1);
+            String[] fields = CSV_PATTERN.split(value.toString(), -1);
 
-            if (fields.length < 8 || fields[0].contains("Invoice")) {
+            if (fields.length < 8 || fields[0].equals("Invoice")) {
                 return;
             }
 
             String invoiceVal = fields[0].trim();
             String countryVal = fields[7].trim();
 
-            if (invoiceVal.isEmpty() || countryVal.isEmpty() || invoiceVal.startsWith("C")) {
+            if (invoiceVal.isEmpty() || invoiceVal.startsWith("C") || countryVal.isEmpty()) {
                 return;
             }
 
@@ -45,14 +45,13 @@ public class OnlineRetailQ1 {
         private IntWritable result = new IntWritable();
 
         public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            HashSet<String> uniqueInvoices = new HashSet<>();
+            HashSet<String> uniqueSet = new HashSet<>();
 
             for (Text val : values) {
-                uniqueInvoices.add(val.toString());
+                uniqueSet.add(val.toString());
             }
 
-            result.set(uniqueInvoices.size());
-            context.write(key, result);
+            context.write(key, new IntWritable(uniqueSet.size()));
         }
     }
 
@@ -62,8 +61,17 @@ public class OnlineRetailQ1 {
         job.setJarByClass(OnlineRetailQ1.class);
         job.setMapperClass(RetailMapper.class);
         job.setReducerClass(RetailReducer.class);
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(Text.class);
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
+
+        if (args.length > 2) {
+            int linesPerMap = Integer.parseInt(args[2]);
+            job.setInputFormatClass(NLineInputFormat.class);
+            NLineInputFormat.setNumLinesPerSplit(job, linesPerMap);
+        }
+
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
         System.exit(job.waitForCompletion(true) ? 0 : 1);

@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     python3 \
     python3-pip \
-    && pip3 install matplotlib \
+    && pip3 install matplotlib pandas openpyxl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

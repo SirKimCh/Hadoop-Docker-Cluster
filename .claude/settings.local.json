@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -c \",Australia$\")",
+      "Bash(grep \",Australia$\" \"F:/CaoHoc/Hadoop-Docker-Cluster/data/online_retail_II.csv\")",
+      "Bash(awk -F',' '{print $7}')",
+      "Bash(awk -F',' '{if\\($7==\"\" || $7==\" \"\\) print}')"
+    ]
+  }
+}
